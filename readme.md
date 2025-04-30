@@ -19,6 +19,7 @@ Fitur Utama (untuk versi gratis tidak semuanya ada)
 • mau beli yang versi premium? http://lynk.id/aier/mloYxRr/
 Cara penggunaan
 pastikan go dan python sudah terinstall dan bisa digunakan
+install pip terlebih dahulu
 python lazyhunter.py
 (jika belum mengunduh tool tambahan, LazyHunter akan otomatis menginstall, tunggu sampai proses selesai, jika ada error bisa ditanyakan ke PHIMS)
 masukkan url target tanpa http/https
