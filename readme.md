@@ -3,23 +3,23 @@ LazyHunter
 LazyHunter adalah tool otomatisasi recon dan scanning untuk bug hunter yang ingin kerja cepat dan efisien. Dirancang untuk pemula maupun profesional.
 
 Fitur Utama
-1. Lightscan  
+# 1. Lightscan  
    Scanning cepat menggunakan `subfinder`, `httpx`, dan `nuclei`. Cocok untuk pemeriksaan awal terhadap subdomain dan mendeteksi celah umum secara langsung.
 
-2. Deepscan  (Premium)
+# 2. Deepscan  (Premium)
    Scanning mendalam menggunakan kombinasi `Subfinder + Assetfinder -> httpx -> nuclei -> katana -> grep -> nuclei`.  
    Proses ini mencari subdomain sebanyak mungkin, menyaring yang aktif, mendeteksi celah keamanan, dan menemukan endpoint tersembunyi melalui crawling.
 
-3. Find Sensitive Data  (Premium)
+# 3. Find Sensitive Data  (Premium)
    Mencari file atau direktori sensitif seperti:
    - `.env`, `.git`, `.svn`
    - File backup (.zip, .bak, .old)
    - File credential atau konfigurasi
 
-4. Manual Dorking  
+# 4. Manual Dorking  
    Melakukan pencarian secara manual di mesin pencari (Google, Bing, dll.) menggunakan teks dork pilihanmu. Cocok untuk hunting data secara spesifik.
 
-5. Subdomain Takeover  
+# 5. Subdomain Takeover  
    Mengecek apakah subdomain yang ditemukan bisa di-takeover (diambil alih) menggunakan `nuclei` dengan template takeover. Berguna untuk mendeteksi aset yang tidak lagi aktif atau terkonfigurasi dengan buruk.
 
 • Notifikasi ke Telegram
@@ -43,7 +43,8 @@ python lazyhunter.py
 
 pilih fitur yang diiginkan
 
-untuk membeli versi premium, kunjungi: https://lynk.id/aier/mloYxRr/
+# untuk membeli versi premium, kunjungi: https://lynk.id/aier/mloYxRr/
+
 # Disclaimer!!!
 Segala aktivitas yang dilakukan oleh pengguna tool ini diluar
 tanggung jawab saya, Saya tidak bertanggung jawab atas penyalahgunaan
