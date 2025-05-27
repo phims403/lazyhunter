@@ -238,9 +238,6 @@ def process_domain(target, scan_type):
     subdomain_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
     active_file = os.path.join(OUTPUT_FOLDER_ACTIVE, f"active_{target}.txt")
     nuclei_output_httpx = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_active_{target}.txt")
-    katana_output = os.path.join(OUTPUT_FOLDER_KATANA, f"katana_{target}.txt")
-    nuclei_output_katana = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_{target}_katana.txt")
-    katana_filtered_output = os.path.join(OUTPUT_FOLDER_GREP, f"grep_{target}_katana.txt")
     if scan_type == "1":
         # Light scan
         print(f"\n[🔎] Mencari subdomain dengan Subfinder untuk: {target}")
@@ -312,10 +309,9 @@ if __name__ == "__main__":
     print_logo()
     scan_type = tampilkan_menu()
     if scan_type in "1":
-        targets = get_target_input()
-        for target in targets:
-            print(f"\n[▶] Memulai proses untuk{target}")
-            process_domain(target, scan_type)
+        target = get_target_input()
+        print(f"\n[▶] Memulai proses untuk {target}")
+        process_domain(target, scan_type)
     elif scan_type == "2":
         print("Premium Version! buy at https://lynk.id/aier/mloYxRr/")
     elif scan_type == "3":
