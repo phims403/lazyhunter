@@ -24,7 +24,7 @@ adalah tool otomatisasi recon dan scanning untuk bug hunter yang ingin kerja cep
    - Grep → filter URL yang memiliki parameter (?key=value).
    - Nuclei tahap 2 → scan url hasil crawling dengan template DAST (Dynamic Analysis) untuk deteksi kerentanan seperti xss, sqli, lfi.
    - Kecepatan scan dapat disesuaikan (low/standard/fast).
-   - Semua hasil dikirim otomatis ke Telegram.
+   - Semua hasil scan nuclei dikirim otomatis ke Telegram.
 
 ---
 
