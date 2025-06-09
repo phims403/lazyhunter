@@ -93,7 +93,7 @@ sudo apt install golang-go python3 python3-pip -y
 
 ---
 
-📥 2. Install Dependency Python
+## 📥 2. Install Dependency Python
 Install library Python yang dibutuhkan:
 ```bash
 pip install -r requirements.txt
