@@ -98,7 +98,6 @@ def print_logo():
                  ░         ░ ░                                                          
 """
     print(red + logo + reset)
-    version_status = get_status_version().ljust(43)
     
     
     print(f"                                LAZYHUNTER v{version_status}")
