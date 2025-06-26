@@ -47,7 +47,7 @@ os.makedirs(OUTPUT_FOLDER_NUCLEI, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_CRAWLED, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_SENSITIVE_DATA, exist_ok=True)
 
-LOCAL_VERSION = "1.1.3"
+LOCAL_VERSION = "1.2.0"
 def get_status_version():
     
     url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/version.txt"
