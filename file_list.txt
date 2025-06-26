@@ -1,2 +1,1 @@
-tes.py
-yooo.txt
+lazyhunter.py
