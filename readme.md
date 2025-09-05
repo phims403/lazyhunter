@@ -1,6 +1,6 @@
 # LAZYHUNTER
 adalah tool otomatisasi recon untuk bug hunter yang ingin kerja cepat dan efisien. Dirancang untuk pemula maupun profesional.
-
+ 
 ---
 
 ## Fitur Utama
@@ -30,7 +30,7 @@ adalah tool otomatisasi recon untuk bug hunter yang ingin kerja cepat dan efisie
 ### 3. Deep Scan (Recon Mendalam)
     - Subfinder + Assetfinder → menemukan subdomain
     - Httpx → validasi subdomain aktif (200)
-    - Katana + Gau → Crawling URL berparameter dan .js.
+    - Waybackurls + Katana + Gau → Crawling URL berparameter dan .js.
     - Httpx → validasi URL aktif (200)
     - Pisahkan url berparameter dan url (.js)
     - Nuclei tahap 1: scan subdomain aktif (template umum).
