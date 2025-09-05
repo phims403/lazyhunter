@@ -1,11 +1,13 @@
 #!/bin/bash
 
+ 
+ 
 echo "══════════════════════════════════════════════"
 echo " LAZYHUNTER Setup Script - Install Tools"
 echo "══════════════════════════════════════════════"
 
-# 1. Cek apakah Go sudah terinstal dan versinya minimal 1.23
-echo "[*] Memastikan Go terinstal dan versinya minimal 1.23..."
+# 1. Cek apakah Go sudah terinstal dan versinya minimal 1.24
+echo "[*] Memastikan Go terinstal dan versinya minimal 1.24..."
 
 if ! command -v go &> /dev/null; then
     echo "[❌] Go belum terinstal. Silakan install Go terlebih dahulu:"
@@ -13,8 +15,8 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
-# Ambil versi Go dari output `go version`, contoh: go1.23.0
-GO_VERSION_RAW=$(go version | awk '{print $3}')   # ex: go1.23.0
+# Ambil versi Go dari output `go version`, contoh: go1.24.0
+GO_VERSION_RAW=$(go version | awk '{print $3}')   # ex: go1.24.0
 GO_VERSION=${GO_VERSION_RAW#go}                   # remove 'go' prefix
 
 # Fungsi pembanding versi
@@ -43,6 +45,7 @@ GO_TOOLS=(
     "github.com/projectdiscovery/katana/cmd/katana@latest"
     "github.com/tomnomnom/assetfinder@latest"
     "github.com/lc/gau/v2/cmd/gau@latest"
+    "github.com/tomnomnom/waybackurls@latest"
 )
 
 for tool in "${GO_TOOLS[@]}"; do
