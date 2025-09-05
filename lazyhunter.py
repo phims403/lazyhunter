@@ -9,11 +9,20 @@ import json
 import smtplib
 import base64
 import sys
+import datetime
+import threading
+import select
+import termios
+import tty
+import signal
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from urllib.parse import urlparse, parse_qs, unquote
-from config import BOT_TOKEN, CHAT_ID, EMAIL_PENGIRIM, EMAIL_PASSWORD, NAMA_PELAPOR
+import config
+import re
+import importlib
+
 from env import GITHUB_TOKEN, GITHUB_USER, GITHUB_REPO, OPENROUTER_API_KEY
 def token_valid(token):
     return token.startswith("bot") or (len(token) > 30 and ":" in token)
@@ -37,7 +46,7 @@ os.makedirs(OUTPUT_FOLDER_ACTIVE, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_NUCLEI, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_CRAWLED, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_SENSITIVE_DATA, exist_ok=True)
-LOCAL_VERSION = "1.2.0"
+LOCAL_VERSION = "1.2.1"
 def get_status_version():
     url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/version.txt"
     headers = {
@@ -85,21 +94,109 @@ def tampilkan_menu():
     print("\n    Choose Feature:")
     print("  [0]  Feature Information")
     print("  [1]  Light Scan")
-    print("  [2]  Dark Scan (\033[92mNEW\033[0m)")
+    print("  [2]  Dark Scan")
     print("  [3]  Deep Scan (\033[91mTOP FEATURE\033[0m)")
     print("  [4]  Scan Subdomain Takeover")
     print("  [5]  find Sensitive Data")
     print("  [6]  Manual Dorking")
     print("  [7]  Generate Report -> Send To Telegram")
     print("  [8]  Generate Report -> Send To Email Target (\033[91mTOP FEATURE\033[0m)")
+    print("  [9]  Setup Configuration")
     print("  [99] Out ")
     print("  [999] Update Tool")
     print("──────────────────────────────────────────────────────────────────────────────")
     while True:
         pilihan = input("Choose Feature (0-8, 99, or 999): ").strip()
-        if pilihan in ["0", "1", "2", "3", "4", "5", "6", "7", "8", "99", "999"]:
+        if pilihan in ["0","1","2","3","4","5","6","7","8","9","99","999"]:
             return pilihan
+
         print("[❌] Pilihan tidak valid. Masukkan angka 0-8, 99, atau 999")
+
+def setup_menu():
+    while True:
+        print("\n=== Setup Menu ===")
+        print("1. Setup Nama Pelapor")
+        print("2. Setup Email")
+        print("3. Setup Password Gmail")
+        print("4. Setup Bot Token")
+        print("5. Setup Chat ID")
+        print("6. Setup Scanning Speed")
+        print("7. Setup Katana Limit")
+        print("8. Setup Semua")
+        print("9. Kembali ke menu utama")
+        pilih = input("Pilih (1-9): ").strip()
+        if pilih == "1":
+            cur = getattr(config, "NAMA_PELAPOR", "")
+            val = input(f"Nama Pelapor (sekarang: '{cur}'), enter=skip: ").strip()
+            if val:
+                write_config({"NAMA_PELAPOR": val})
+        elif pilih == "2":
+            cur = getattr(config, "EMAIL_PENGIRIM", "")
+            val = input(f"Email Pengirim (sekarang: '{cur}'), enter=skip: ").strip()
+            if val:
+                write_config({"EMAIL_PENGIRIM": val})
+        elif pilih == "3":
+            val = input("Password Gmail (enter=skip): ").strip()
+            if val:
+                write_config({"EMAIL_PASSWORD": val})
+        elif pilih == "4":
+            cur = getattr(config, "BOT_TOKEN", "")
+            val = input(f"Bot Token (sekarang: '{cur[:6]}...'), enter=skip: ").strip()
+            if val:
+                write_config({"BOT_TOKEN": val})
+        elif pilih == "5":
+            cur = getattr(config, "CHAT_ID", "")
+            val = input(f"Chat ID (sekarang: '{cur}'), enter=skip: ").strip()
+            if val:
+                write_config({"CHAT_ID": val})
+        elif pilih == "6":
+            cur = getattr(config, "SCAN_SPEED", "")
+            while True:
+                val = input(f"Scan Speed (low/standard/fast) (sekarang: '{cur}'): ").strip().lower()
+                if val in ["low", "standard", "fast"]:
+                    write_config({"SCAN_SPEED": val})
+                    break  # keluar dari loop kalau valid
+                else:
+                    print("[!] Nilai tidak valid; gunakan low/standard/fast.")
+
+        elif pilih == "7":
+            new_limit = input(f"Masukkan limit subdomain untuk Katana (default {getattr(config, 'KATANA_LIMIT', 20)}): ").strip()
+            if new_limit.isdigit() and int(new_limit) > 0:
+                write_config({"KATANA_LIMIT": int(new_limit)})
+                print(f"[✓] Katana limit diubah menjadi {new_limit}")
+            else:
+                print("[ℹ️] Input kosong atau tidak valid, tidak ada perubahan.")
+
+
+
+        elif pilih == "8":
+            updates = {}
+            v = input(f"Nama Pelapor (sekarang: '{getattr(config,'NAMA_PELAPOR','')}'), enter=skip: ").strip()
+            if v: updates["NAMA_PELAPOR"] = v
+            v = input(f"Email Pengirim (sekarang: '{getattr(config,'EMAIL_PENGIRIM','')}'), enter=skip: ").strip()
+            if v: updates["EMAIL_PENGIRIM"] = v
+            v = input("Password Gmail (enter=skip): ").strip()
+            if v: updates["EMAIL_PASSWORD"] = v
+            v = input(f"Bot Token (sekarang: '{getattr(config,'BOT_TOKEN','')[:6]}...'), enter=skip: ").strip()
+            if v: updates["BOT_TOKEN"] = v
+            v = input(f"Chat ID (sekarang: '{getattr(config,'CHAT_ID','')}'), enter=skip: ").strip()
+            if v: updates["CHAT_ID"] = v
+            v = input(f"Scan Speed (low/standard/fast) (sekarang: '{getattr(config,'SCAN_SPEED','')}'), enter=skip: ").strip().lower()
+            if v in ["low","standard","fast"]: updates["SCAN_SPEED"] = v
+            limit_val = input(f"Masukkan Katana Limit (default {config.KATANA_LIMIT}, Enter skip): ").strip()
+            if limit_val.isdigit() and int(limit_val) > 0:
+                updates["KATANA_LIMIT"] = int(limit_val)
+            
+            if updates:
+                write_config(updates)
+            else:
+                print("[ℹ️] Tidak ada perubahan.")
+        elif pilih == "9":
+            return
+        else:
+            print("[❌] Pilihan tidak valid.")
+
+
 def get_target_input():
     """Meminta input URL target langsung dari pengguna."""
     while True:
@@ -119,17 +216,24 @@ def fitur_info():
    - Kecepatan scan dapat disesuaikan (low/standard/fast).
    - Hasil scan dikirim otomatis ke Telegram.
 
-2. Deep Scan (Pemindaian Mendalam)
+2. Dark Scan (Recon Menengah)
    - Subfinder + Assetfinder → mencari sebanyak mungkin subdomain dari target.
    - Gabungkan dan hilangkan duplikat hasil.
    - Httpx → validasi subdomain aktif.
-   - Nuclei tahap 1 → scan awal menggunakan template umum seperti:
-     misconfiguration, exposure, default-login, panel, cves, cms, files, dns, ssl, token, backup, dll.
    - Katana → crawling URL untuk mencari parameter dari subdomain aktif.
    - Grep → filter URL yang memiliki parameter (?key=value).
-   - Nuclei tahap 2 → scan url hasil crawling untuk deteksi kerentanan seperti xss, sqli, lfi, dll.
+   - Nuclei tahap 1 → scan url berparameter untuk deteksi kerentanan seperti xss, sqli, lfi, dll.
+   - Nuclei tahap 2 → scan url (.js) untuk deteksi exposure
    - Kecepatan scan dapat disesuaikan (low/standard/fast).
    - Semua hasil dikirim otomatis ke Telegram.
+   
+3. Deep Scan (Recon Mendalam)
+   - Sama seperti Dark Scan dengan perbedaaan:
+   - Nuclei tahap 1 → scan awal menggunakan template umum seperti:
+     misconfiguration, exposure, default-login, panel, cves, cms, files, dns, ssl, token, backup, dll.
+   - Nuclei tahap 2 → scan url berparameter untuk deteksi kerentanan seperti xss, sqli, lfi, dll.
+   - Nuclei tahap 3 → scan url (.js) untuk deteksi exposure
+   - Nuclei tahap 4 → scan subdomain untuk deteksi subdomain takeover
 
 4. Find Sensitive Data (Cari Data Sensitif Otomatis)
    - Menggunakan duckduckgo dork otomatis.
@@ -174,8 +278,8 @@ Buatkan teks laporan kerentanan profesional dalam bahasa Indonesia dengan strukt
 6. Detail Pelapor (hanya Nama dan Email)
 
 Data Input:
-- Nama Pelapor: {NAMA_PELAPOR}
-- Email Pelapor: {EMAIL_PENGIRIM}
+- Nama Pelapor: {config.NAMA_PELAPOR}
+- Email Pelapor: {config.EMAIL_PENGIRIM}
 - Jenis Kerentanan: {vuln}
 - Langkah Validasi / PoC: {validasi}
 
@@ -335,6 +439,81 @@ USER_AGENTS = [
     'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)',
     'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)'
 ]
+
+# ----------------- Speed mapping untuk semua tools -----------------
+SPEED_ARGS = {
+    "low": {
+        "nuclei": ["-c", "10", "--max-host-error", "20"],
+        "httpx": ["-silent", "-mc", "200", "-t", "50", "-rate-limit", "100", "-retries", "1", "-timeout", "10"],
+        "httpx_sensitive": ["-silent", "-mc", "200,403", "-sc", "-t", "50", "-rate-limit", "100", "-retries", "1", "-timeout", "10"],
+        "katana": ["-jc", "5", "-d", "2"],
+        "gau": ["--subs", "--threads", "5", "--blacklist", "png,jpg,jpeg,gif,css,svg,woff,woff2,ttf,eot,otf,ico", "--verbose"]
+    },
+    "standard": {
+        "nuclei": ["-c", "25", "--max-host-error", "30"],
+        "httpx": ["-silent", "-mc", "200", "-t", "200", "-rate-limit", "500", "-retries", "2", "-timeout", "10"],
+        "httpx_sensitive": ["-silent", "-mc", "200,403", "-sc", "-t", "200", "-rate-limit", "500", "-retries", "2", "-timeout", "10"],
+        "katana": ["-jc", "15", "-d", "4"],
+        "gau": ["--subs", "--threads", "20", "--blacklist", "png,jpg,jpeg,gif,css,svg,woff,woff2,ttf,eot,otf,ico", "--verbose"]
+    },
+    "fast": {
+        "nuclei": ["-c", "40", "--max-host-error", "50"],
+        "httpx": ["-silent", "-mc", "200", "-t", "300", "-rate-limit", "1200", "-retries", "4", "-timeout", "10"],
+        "httpx_sensitive": ["-silent", "-mc", "200,403", "-sc", "-t", "300", "-rate-limit", "1200", "-retries", "4", "-timeout", "10"],
+        "katana": ["-jc", "30", "-d", "6"],
+        "gau": ["--subs", "--threads", "40", "--blacklist", "png,jpg,jpeg,gif,css,svg,woff,woff2,ttf,eot,otf,ico", "--verbose"]
+    }
+}
+
+def write_config(updates: dict):
+    """
+    updates: dict, contohnya {"config.SCAN_SPEED": "fast", "config.EMAIL_PENGIRIM": "a@b.com"}
+    Fungsi ini mengubah/menambah nilai di config.py lalu me-reload modul config.
+    """
+    cfg_path = os.path.join(os.path.dirname(__file__), "config.py")
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except FileNotFoundError:
+        content = ""
+
+    for key, val in updates.items():
+        if isinstance(val, str):
+            replacement = f'{key} = "{val}"'
+        else:
+            replacement = f'{key} = {val}'
+        pattern = rf'^{key}\s*=.*$'
+        if re.search(pattern, content, flags=re.MULTILINE):
+            content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+        else:
+            content += "\n" + replacement + "\n"
+
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    # reload module so runtime menggunakan config terkini
+    importlib.reload(config)
+    print("[✓] config.py diperbarui dan dimuat ulang.")
+
+def get_speed():
+    s = getattr(config, "SCAN_SPEED", None)
+    if not s:
+        return None
+    s = s.lower()
+    return s if s in SPEED_ARGS else None
+
+def get_tool_args(tool_name: str):
+    """
+    tool_name: "nuclei" | "httpx" | "httpx_sensitive" | "katana" | "gau"
+    -> mengembalikan list args sesuai config.SCAN_SPEED jika ada, else None
+    """
+    s = get_speed()
+    if not s:
+        return None
+    return SPEED_ARGS[s].get(tool_name)
+# --------------------------------------------------------------------
+
+
 def bersihkan_link(link):
     if link.startswith("//"):
         link = "https:" + link
@@ -426,16 +605,79 @@ def dorking_manual():
           output_file = os.path.join(OUTPUT_FOLDER_DORKING, nama_file)
           manual_dorking(output_file)
 def tanya_kecepatan_scan():
-    pilihan = input("\nSelect Scanning Speed: 1.Low, 2.Standar, 3.Fast: ").strip()
+    # cek config
+    speed = get_speed()
+    if speed:
+        print(f"[ℹ️] SCAN_SPEED sudah diset di config → gunakan '{speed}'")
+        return SPEED_ARGS[speed]["nuclei"]
+
+    # kalau belum ada (kosong / None), baru tanya user
+    pilihan = input("\nSelect Scanning Speed: 1.Low, 2.Standard, 3.Fast: ").strip()
     if pilihan == "1":
-        return ["-c", "10", "--max-host-error", "20"]
+        return SPEED_ARGS["low"]["nuclei"]
     elif pilihan == "2":
-        return ["-c", "25", "--max-host-error", "30"]
+        return SPEED_ARGS["standard"]["nuclei"]
     elif pilihan == "3":
-        return ["-c", "40", "--max-host-error", "50"]
+        return SPEED_ARGS["fast"]["nuclei"]
     else:
-        print("[❌] Pilihan tidak valid. Default ke Standar.")
-        return ["-c", "25", "--max-host-error", "30"]
+        print("[❌] Pilihan tidak valid. Default ke Standard.")
+        return SPEED_ARGS["standard"]["nuclei"]
+
+def log_error(target, proses, error_message, error_log_file="error.log"):
+    # Buat file error jika belum ada
+    if not os.path.exists(error_log_file):
+        with open(error_log_file, "w", encoding="utf-8") as f:
+            f.write("=== Log Error Tool ===\n\n")
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    log_text = (
+        f"[{now}]\n"
+        f"Target     : {target}\n"
+        f"Proses     : {proses}\n"
+        f"Error      : {error_message}\n"
+        f"{'-'*50}\n"
+    )
+
+    with open(error_log_file, "a", encoding="utf-8") as f:
+        f.write(log_text)
+
+    print("\n[!] Terjadi error:\n")
+    print(error_message)
+
+def baca_file_real_time(nama_tool, path_file, label, process):
+    stop_evt = threading.Event()
+
+    jumlah = 0
+    try:
+        # tunggu file muncul
+        while not os.path.exists(path_file):
+            time.sleep(0.1)
+
+
+        with open(path_file, "r", encoding="utf-8", errors="ignore") as f:
+            while True:
+                line = f.readline()
+                if not line:
+                    if process and process.poll() is not None:
+                        break
+                    time.sleep(0.05)
+                    continue
+
+                jumlah += 1
+                msg = f"[+] Menjalankan {nama_tool} ditemukan \033[93m{jumlah}\033[94m {label}..."
+                # hapus \n biar gak bikin baris baru
+                sys.stdout.write("\r" + msg + " " * 20)  
+                sys.stdout.flush()
+
+        if not stop_evt.is_set():
+            print(f"\r\033[33m[✓]\033[94m {nama_tool} berhasil menemukan \033[93m{jumlah}\033[94m {label}\033[0m".ljust(100))
+
+    except Exception as e:
+        print(f"[!] Gagal membaca file {path_file}: {e}")
+
+
+        
 def finding_subdomain(target, subdomain_file):
     print(f"\n\033[94m[+] Mencari subdomain dengan Subfinder dan Assetfinder untuk: {target}\033[0m")
     print("\033[94m[+] Menjalankan Subfinder...\033[0m")
@@ -450,9 +692,14 @@ def finding_subdomain(target, subdomain_file):
         if process_subfinder.returncode != 0:
             print(f"[!] Gagal menjalankan Subfinder untuk target {target}")
             return
+    
+    
     except Exception as e:
         print(f"[!] Error saat menjalankan Subfinder: {e}")
-        return
+        log_error(target, "subfinder", str(e))
+        return    
+    
+    
     print("\033[94m[+] Menjalankan Assetfinder...\033[0m")
     assetfinder_tmp = tempfile.NamedTemporaryFile(delete=False).name
     try:
@@ -468,123 +715,145 @@ def finding_subdomain(target, subdomain_file):
             return
     except Exception as e:
         print(f"[!] Error saat menjalankan Assetfinder: {e}")
-        return
+        log_error(target, "assetfinder", str(e))
+        return      
+  
     all_subs = set()
     for path in [subdomain_file, assetfinder_tmp]:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
             all_subs.update(line.strip() for line in f if line.strip())
     with open(subdomain_file, "w") as f:
         f.write("\n".join(sorted(all_subs)))
-    print(f"\033[94m[✓] Subdomain hasil digabung dan disimpan di: {subdomain_file}\033[0m")
-    print(f"\033[94m[✓] Ditemukan total \033[92m{len(all_subs)}\033[94m Subdomain\033[0m")
-def active_check(active_file, subdomain_file, url):
-        print(f"\033[94m[+] Mengecek {url} yang aktif...\033[0m")
-        try:
-            with open(active_file, "w") as f:
-                process = subprocess.Popen(
-                    ["httpx", "-silent", "-mc", "200", "-t", "200", "-l", subdomain_file],
-                    stdout=f,
-                    stderr=subprocess.DEVNULL
-                )
-                process.wait()
-            if process.returncode != 0:
-                print(f"[!] Gagal menjalankan httpx")
-                return
-        except Exception as e:
-            print(f"[!] Error httpx: {e}")
-            return
-        with open(active_file) as f:
-            aktif = len(f.readlines())
-        print(f"\033[94m[✓] Ditemukan \033[92m{aktif}\033[94m {url} aktif\033[0m")
-def crawling_katana(katana_output, active_file):
-        print("\033[94m[+] Memulai proses crawling dengan Katana...\033[0m")
-        try:
-            with open(katana_output, "w") as f:
-                process = subprocess.Popen(
-                    ["katana", "-list", active_file, "-jc", "-d", "4", "-fs", "fqdn", "-f", "qurl"],
-                    stdout=f,
-                    stderr=subprocess.DEVNULL
-                )
-                process.wait()
-            if process.returncode != 0:
-                print(f"[!] Gagal menjalankan katana")
-                return
-        except Exception as e:
-            print(f"[!] Error katana: {e}")
-            return
-def crawling_gau(gau_output, target):
-        print("\033[94m[+] Memulai proses crawling dengan Gau...\033[0m")
-        try:
-            with open(gau_output, "w") as outfile:
-                process = subprocess.Popen([
-                    "gau", target,
-                    "--subs",
-                    "--threads", "20",
-                    "--blacklist", "png,jpg,jpeg,gif,css,svg,woff,woff2,ttf,eot,otf,ico,txt,json",
-                    "--verbose"
-                ], stdout=outfile, stderr=subprocess.DEVNULL)
-                process.wait()
-            if process.returncode != 0:
-                print(f"[!] Gagal menjalankan gau")
-                return
-        except Exception as e:
-            print(f"[!] Error gau: {e}")
-            return
-def nuclei_without_parameter(target, input_file, output_file, user_agent, scan_args):
-    print("\033[94m[+] Menjalankan Nuclei untuk Subdomain yang aktif (Without Parameter)...\033[0m")
+    print(f"\033[33m[✓]\033[94m Ditemukan total \033[92m{len(all_subs)}\033[94m Subdomain\033[0m")
+
+        
+def active_check(active_file, subdomain_file, url, target):
+    print(f"\033[94m[+] Mengecek {url} yang aktif...\033[0m")
     try:
-        subprocess.run([
-            "nuclei", "-l", input_file, "-s", "low,medium,high,critical", "-tags", "misconfiguration,exposure,default-login,panel,cves,tech,cms,files,dns,takeover,ssl,token,fuzz,backup,git,iot,xss", "-ept", "ssl", "-H", f"User-Agent: {user_agent}", "-timeout", "5", "-retries", "1", *scan_args, "-o", output_file
-        ], check=True)
-    except subprocess.CalledProcessError:
-        print("[!] Gagal menjalankan Nuclei (HTTPX)")
+        httpx_args = get_tool_args("httpx") or ["-silent", "-mc", "200", "-t", "300", "-rate-limit", "1000", "-retries", "3", "-timeout", "10"]
+        with open(active_file, "w") as f:
+            cmd = ["httpx", *httpx_args, "-l", subdomain_file]
+            process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.DEVNULL)
+            baca_file_real_time("Httpx", active_file, url, process)
+
+        if process.returncode != 0:
+            print(f"[!] Gagal menjalankan httpx")
+            return
+
+    except Exception as e:
+        print(e)
+        log_error(target, "httpx", str(e))
         return
-    kirim_laporan_telegram(output_file, f"{target} (WITHOUT PARAMETER)")
-def nuclei_js_exposure(target, input_file, output_file, user_agent, scan_args):
-    print("\033[94m[+] Menjalankan Nuclei untuk URL .js (tag: exposure)...\033[0m")
+
+    with open(active_file) as f:
+        aktif = len(f.readlines())
+
+        
+        
+        
+
+def crawling_katana(katana_output, input_file, target):
+    print("\033[94m[+] Memulai proses crawling dengan Katana...\033[0m")
     try:
-        subprocess.run([
-            "nuclei", "-l", input_file, "-tags", "exposure", "-timeout", "5", "-retries", "1", "-H", f"User-Agent: {user_agent}", *scan_args, "-o", output_file
-        ], check=True)
-    except subprocess.CalledProcessError:
-        print("[!] Gagal menjalankan Nuclei (JS Exposure)")
-        return
-    kirim_laporan_telegram(output_file, f"{target} (JS Exposure)")
-def nuclei_param_dast(target, input_file, output_file, user_agent, scan_args):
-    print("\033[94m[+] Menjalankan Nuclei untuk URL berparameter (D-AST)...\033[0m")
-    try:
-        subprocess.run([
-            "nuclei", "-l", input_file, "-dast", "-tags", "xss,sqli,ssrf,rce,lfi,rfi,redirect,crlf,idor,ssti,csrf,file-upload,path-traversal,debug,exposure,auth-bypass,fuzz,generic,web,token-leakage", "-fa", "high", "-s", "low,medium,high,critical", "-ept", "ssl", "-timeout", "5", "-retries", "1", "-H", f"User-Agent: {user_agent}", *scan_args, "-o", output_file
-        ], check=True)
-    except subprocess.CalledProcessError:
-        print("[!] Gagal menjalankan Nuclei (Parameter DAST)")
-        return
-    kirim_laporan_telegram(output_file, f"{target} (Parameter DAST)")
-def gabungkan_hasil_crawling(katana_output, gau_output, crawled_filtered_output, target):
+        with open(katana_output, "w") as f:
+            katana_args = get_tool_args("katana") or ["-jc", "15", "-d", "4"]
+            cmd = ["katana", "-list", input_file, *katana_args, "-f", "qurl", "-fs", "fqdn"]
+            process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.DEVNULL)
+        baca_file_real_time("Katana", katana_output, "url", process)
+
+        if process.returncode != 0:
+            print(f"[!] Gagal menjalankan katana")
+            return
+    except Exception as e:
+        print(e)
+        log_error(target, "katana", str(e))
     katana_urls = []
     if os.path.exists(katana_output):
         with open(katana_output, "r") as f:
             katana_urls = [line.strip() for line in f if "http" in line]
-    print(f"\033[94m[✓] Berhasil crawling \033[92m{len(katana_urls)}\033[94m URL dengan Katana\033[0m")
-    crawling_gau(gau_output, target)
+
+
+def crawling_wayback(wayback_output, active_file, target):
+    print("\033[94m[+] Memulai proses crawling dengan Waybackurls...\033[0m")
+    try:
+        with open(wayback_output, "w") as f:
+            process = subprocess.Popen(
+                ["waybackurls"],
+                stdin=open(active_file, "r"),
+                stdout=f,
+                stderr=subprocess.DEVNULL
+            )
+        baca_file_real_time("wayback", wayback_output, "url", process)
+        if process.returncode != 0:
+            print(f"[!] Gagal menjalankan waybackurls")
+            return
+    except Exception as e:
+        print(e)
+        log_error(target, "wayback", str(e))
+    wayback_urls = []
+    if os.path.exists(wayback_output):
+        with open(wayback_output, "r") as f:
+            wayback_urls = [line.strip() for line in f if "http" in line]
+
+
+
+
+def crawling_gau(gau_output, target):
+    print("\033[94m[+] Memulai proses crawling dengan Gau...\033[0m")
+    try:
+        gau_args = get_tool_args("gau") or ["--subs", "--threads", "20", "--blacklist", "png,jpg,jpeg,gif,css,svg,woff,woff2,ttf,eot,otf,ico", "--verbose"]
+        with open(gau_output, "w") as outfile:
+            cmd = ["gau", target, *gau_args]
+            process = subprocess.Popen(cmd, stdout=outfile, stderr=subprocess.DEVNULL)
+        baca_file_real_time("Gau", gau_output, "url", process)
+        if process.returncode != 0:
+            print(f"[!] Gagal menjalankan gau")
+            return
+    except Exception as e:
+        print(e)
+        log_error(target, "gau", str(e))
     gau_urls = []
     if os.path.exists(gau_output):
         with open(gau_output, "r") as f:
             gau_urls = [line.strip() for line in f if "http" in line]
-    print(f"\033[94m[✓] Berhasil crawling \033[92m{len(gau_urls)}\033[94m URL dengan Gau\033[0m")
+
+
+
+
+def gabungkan_hasil_crawling(wayback_output, gau_output, katana_output, crawled_filtered_output, target):
+    katana_urls = []
+    if os.path.exists(katana_output):
+        with open(katana_output, "r") as f:
+            katana_urls = [line.strip() for line in f if "http" in line]
+    wayback_urls = []
+    if os.path.exists(wayback_output):
+        with open(wayback_output, "r") as f:
+            wayback_urls = [line.strip() for line in f if "http" in line]
+    gau_urls = []
+    if os.path.exists(gau_output):
+        with open(gau_output, "r") as f:
+            gau_urls = [line.strip() for line in f if "http" in line]
     
-    print("\033[94m[+] Menggabungkan hasil crawling...\033[0m")
     all_urls = set()
-    all_urls.update(katana_urls)
-    for url in gau_urls:
-        if "?" in url or url.endswith(".js"):
+    sensitive_exts = [
+        ".zip", ".tar", ".gz", ".7z", ".rar",
+        ".bak", ".backup", ".old",
+        ".sql", ".db", ".sqlite",
+        ".env", ".log",
+        ".conf", ".config", ".ini", ".cfg",
+        ".xml"
+    ]
+
+    for url in wayback_urls + gau_urls + katana_urls:
+        if "?" in url or url.endswith(".js") or any(url.endswith(ext) or ext in url for ext in sensitive_exts):
             all_urls.add(url)
-    print("\033[94m[+] Menyimpan hasil gabungan yang sudah difilter (tanpa duplikat)...\033[0m")
+
+   
     with open(crawled_filtered_output, "w") as f:
         for url in sorted(all_urls):
             f.write(url + "\n")
+
 def pisahkan_url(crawled_filtered_output, param_output, js_output):
-    print("\033[94m[+] Memisahkan URL berparameter dan JavaScript...\033[0m")
     param_urls = []
     js_urls = []
     with open(crawled_filtered_output, "r") as infile:
@@ -600,8 +869,154 @@ def pisahkan_url(crawled_filtered_output, param_output, js_output):
     with open(js_output, "w") as f:
         for url in js_urls:
             f.write(url + "\n")
-    print(f"\033[94m[✓] Ditemukan \033[92m{len(param_urls)}\033[94m URL berparameter, disimpan di: {param_output}\033[0m")
-    print(f"\033[94m[✓] Ditemukan \033[92m{len(js_urls)}\033[94m URL .js, disimpan di: {js_output}\033[0m")
+    print(f"\033[94m[✓] Ditemukan \033[92m{len(param_urls)}\033[94m URL berparameter\033[0m")
+    print(f"\033[94m[✓] Ditemukan \033[92m{len(js_urls)}\033[94m URL .js\033[0m")
+
+def proses_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output):
+    crawling_wayback(wayback_output, active_file, target)
+    crawling_gau(gau_output, target)
+    with open(active_file, "r") as f:
+        alive_subs = [line.strip() for line in f if line.strip()]
+    limit = getattr(config, "KATANA_LIMIT", 20)
+
+    if len(alive_subs) >= limit:
+        limited_file = os.path.join(os.path.dirname(active_file), f"{limit}active_{target}.txt")
+        with open(limited_file, "w") as f:
+            for sub in alive_subs[:limit]:  # ambil sesuai limit
+                f.write(sub + "\n")
+        print(f"\033[94m[+] Subdomain aktif ≥ {limit}, hanya menggunakan {limit} subdomain aktif\033[0m")
+        input_for_katana = limited_file
+    else:
+        print(f"\033[94m[+] Subdomain aktif < {limit}, langsung gunakan seluruh file untuk scan Katana\033[0m")
+        input_for_katana = active_file
+    crawling_katana(katana_output, input_for_katana, target)
+    gabungkan_hasil_crawling(wayback_output, gau_output, katana_output, crawled_filtered_output, target)
+
+
+def kirim_file_telegram(path_file, domain):
+    """Kirim file hasil scan ke Telegram (sendDocument)."""
+    if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
+        print("[ℹ️] Token bot atau chat_id tidak ditemukan / tidak valid. Melewati pengiriman Telegram.")
+        return 
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+    if not os.path.exists(path_file) or os.stat(path_file).st_size == 0:
+        # Jika file kosong → kirim teks saja
+        pesan = f"[❌] Tidak ada path sensitive yang terdeteksi untuk {domain}"
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data={'chat_id': CHAT_ID, 'text': pesan}
+        )
+        print(f"[ℹ️] Tidak ada path sensitive untuk {domain}")
+        return
+    try:
+        with open(path_file, "rb") as f:
+            response = requests.post(url, data={'chat_id': CHAT_ID}, files={'document': f})
+        if response.status_code == 200:
+            print(f"[✓] File hasil sensitive path {domain} berhasil dikirim ke Telegram.")
+        else:
+            print(f"[❌] Gagal mengirim file ke Telegram: {response.text}")
+    except Exception as e:
+        print(f"[⚠️] Error saat mengirim file ke Telegram: {e}")
+def cek_url_sensitif(target, crawled_filtered_output):
+    print("\033[94m[+] Mengecek URL yang berpotensi sensitif...\033[0m")
+    pot_sen_file = os.path.join("sensitive_data", f"pot_sen_url_{target}.txt")
+    sen_file = os.path.join("sensitive_data", f"sen_url_{target}.txt")
+    sensitive_exts = [
+        ".zip", ".tar", ".gz", ".7z", ".rar",
+        ".bak", ".backup", ".old",
+        ".sql", ".db", ".sqlite",
+        ".env", ".log",
+        ".conf", ".config", ".ini", ".cfg",
+        ".xml", ".json"
+    ]
+
+    try:
+        urls = []
+        if os.path.exists(crawled_filtered_output):
+            with open(crawled_filtered_output, "r") as f:
+                for line in f:
+                    url = line.strip()
+                    if any(url.endswith(ext) or ext in url for ext in sensitive_exts):
+                        urls.append(url)
+
+        if not urls:
+            print(f"[ℹ️] Tidak ada URL sensitif ditemukan untuk {target}")
+            return
+
+        with open(pot_sen_file, "w") as f:
+            for url in urls:
+                f.write(url + "\n")
+
+        print(f"[✓] Ditemukan {len(urls)} URL berpotensi sensitif → {pot_sen_file}")
+
+        # httpx dibuat silent + dipantau real-time
+        with open(sen_file, "w") as f:
+            httpx_args = get_tool_args("httpx_sensitive") or ["-silent", "-mc", "200,403", "-sc", "-t", "300", "-rate-limit", "1000", "-retries", "3", "-timeout", "10"]
+            process = subprocess.Popen(
+                ["httpx", *httpx_args, "-l", pot_sen_file],
+                stdout=f,
+                stderr=subprocess.DEVNULL
+            )
+        baca_file_real_time("Httpx (Sensitive URL)", sen_file, "url sensitif", process)
+
+
+        if process.returncode != 0:
+            print(f"[!] Gagal menjalankan httpx untuk validasi URL sensitif")
+            return
+
+        print(f"[✓] Hasil valid URL sensitif tersimpan → {sen_file}")
+        kirim_file_telegram(sen_file, target)
+
+    except Exception as e:
+        print(f"[!] Error saat cek URL sensitif: {e}")
+        log_error(target, "cek url sensitif", str(e))
+
+
+def nuclei_without_parameter(target, input_file, output_file, user_agent, scan_args):
+    print("\033[94m[+] Menjalankan Nuclei untuk Subdomain yang aktif (Without Parameter)...\033[0m")
+    try:
+        subprocess.run([
+            "nuclei", "-l", input_file, "-s", "low,medium,high,critical", "-tags", "misconfiguration,exposure,default-login,panel,cves,tech,cms,files,dns,takeover,ssl,token,fuzz,backup,git,iot,xss", "-ept", "ssl", "-H", f"User-Agent: {user_agent}", "-timeout", "5", "-retries", "1", *scan_args, "-o", output_file
+        ], check=True)
+    
+
+    except subprocess.CalledProcessError as e:
+        print("[!] Gagal menjalankan Nuclei (HTTPX)")
+        print(e)  # ini akan menampilkan error detail ke terminal
+        log_error(target, "nuclei (httpx)", str(e))
+        return      
+      
+      
+    kirim_laporan_telegram(output_file, f"{target} (WITHOUT PARAMETER)")
+def nuclei_js_exposure(target, input_file, output_file, user_agent, scan_args):
+    print("\033[94m[+] Menjalankan Nuclei untuk URL .js (tag: exposure)...\033[0m")
+    try:
+        subprocess.run([
+            "nuclei", "-l", input_file, "-tags", "exposure", "-timeout", "5", "-retries", "1", "-H", f"User-Agent: {user_agent}", *scan_args, "-o", output_file
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+            print("[!] Gagal menjalankan Nuclei (JS Exposure)")
+            print(e)  # ini akan menampilkan error detail ke terminal
+            log_error(target, "nuclei (JS Exposure)", str(e))
+            return            
+      
+      
+    kirim_laporan_telegram(output_file, f"{target} (JS Exposure)")
+def nuclei_param_dast(target, input_file, output_file, user_agent, scan_args):
+    print("\033[94m[+] Menjalankan Nuclei untuk URL berparameter (-dast)...\033[0m")
+    try:
+        subprocess.run([
+            "nuclei", "-l", input_file, "-dast", "-tags", "xss,sqli,ssrf,rce,lfi,rfi,redirect,crlf,idor,ssti,csrf,file-upload,path-traversal,debug,exposure,auth-bypass,fuzz,generic,web,token-leakage", "-fa", "high", "-s", "low,medium,high,critical", "-ept", "ssl", "-timeout", "5", "-retries", "1", "-H", f"User-Agent: {user_agent}", *scan_args, "-o", output_file
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+            print("[!] Gagal menjalankan Nuclei (Parameter (-dast))")
+            print(e)  # ini akan menampilkan error detail ke terminal
+            log_error(target, "nuclei (Parameter (-dast))", str(e))
+            return            
+      
+    kirim_laporan_telegram(output_file, f"{target} (Parameter (-dast))")
+
+
 def light_scan():
         target = get_target_input()
         scan_args = tanya_kecepatan_scan()
@@ -612,7 +1027,7 @@ def light_scan():
         print(f"\n[▶] Memulai proses untuk {target}")
         waktu_mulai_url = time.time()
         finding_subdomain(target, subdomain_file)
-        active_check(active_file, subdomain_file, "Subdomain")
+        active_check(active_file, subdomain_file, "Subdomain", target)
         waktu_mulai_scan_nuclei = time.time()
         nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
         waktu_selesai_scan_nuclei = time.time()
@@ -621,14 +1036,16 @@ def light_scan():
         menit, detik = divmod(sisa, 60)
         print(f"[⏱️] Proses scanning Nuclei selesai dalam {jam} jam {menit} menit {detik} detik")
         print(f"[✓] Semua proses selesai untuk target: {target}")
+        
 def dark_deep(mode):
         target = get_target_input()
         scan_args = tanya_kecepatan_scan()
         subdomain_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
         active_file = os.path.join(OUTPUT_FOLDER_ACTIVE, f"active_{target}.txt")
         nuclei_output_httpx = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_active_{target}.txt")
-        katana_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"crawled_katana_{target}.txt")
-        gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"{target}_gau.txt")
+        katana_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"katana_{target}.txt")
+        wayback_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"wayback_{target}.txt")
+        gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"_gau{target}.txt")
         nuclei_output_crawled = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_{target}_crawled.txt")
         crawled_filtered_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"crawled_filtered_{target}.txt")
         temp_crawled_filtered_output = os.path.join (OUTPUT_FOLDER_CRAWLED, f"temp_crawled_filtered_{target}.txt")
@@ -640,17 +1057,19 @@ def dark_deep(mode):
         print(f"\n[▶] Memulai proses untuk {target}")
         waktu_mulai_url = time.time()
         finding_subdomain(target, subdomain_file)
-        active_check(active_file, subdomain_file, "Subdomain")
-        crawling_katana(katana_output, active_file)
-        gabungkan_hasil_crawling(katana_output, gau_output, crawled_filtered_output, target)
-        active_check(temp_crawled_filtered_output, crawled_filtered_output, "URL")
+        active_check(active_file, subdomain_file, "Subdomain", target)
+        proses_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output)
+        active_check(temp_crawled_filtered_output, crawled_filtered_output, "URL", target)
         shutil.move(temp_crawled_filtered_output, crawled_filtered_output)
         pisahkan_url(crawled_filtered_output, param_output, js_output)
         waktu_selesai_url = time.time()
         durasi_url = waktu_selesai_url - waktu_mulai_url
         jam, sisa = divmod(int(durasi_url), 3600)
         menit, detik = divmod(sisa, 60)
-        print(f"[⏱️] Berhasil mengumpulkan URL dari {target} selama {jam} jam {menit} menit {detik} detik")
+        print(f"\033[92m[⏱️] Berhasil mengumpulkan URL dari {target} selama "
+            f"\033[93m{jam}\033[92m jam "
+            f"\033[93m{menit}\033[92m menit "
+            f"\033[93m{detik}\033[92m detik\033[0m")        
         waktu_mulai_scan_nuclei = time.time()
         if mode == "dark":
             nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
@@ -679,7 +1098,7 @@ def dark_deep(mode):
         print(f"[⏱️] Proses scanning Nuclei selesai dalam {jam} jam {menit} menit {detik} detik")
         print(f"[✓] Semua proses selesai untuk target: {target}")
 def kirim_laporan_telegram(path_file, domain, max_len=4000):
-    if not token_valid(BOT_TOKEN) or not chat_id_valid(CHAT_ID):
+    if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
         print("[ℹ️] Token bot atau chat_id tidak ditemukan / tidak valid. Melewati pengiriman Telegram.")
         return
     if not os.path.exists(path_file):
@@ -715,7 +1134,7 @@ def kirim_laporan_telegram(path_file, domain, max_len=4000):
     except Exception as e:
         print(f"[⚠️] Terjadi kesalahan saat mengirim ke Telegram: {e}")
 def kirim_laporan_telegram_teks_report(path_file):
-    if not token_valid(BOT_TOKEN) or not chat_id_valid(CHAT_ID):
+    if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
         print("[ℹ️] Token bot atau chat_id tidak ditemukan / tidak valid. Melewati pengiriman Telegram.")
         return
     if not os.path.exists(path_file):
@@ -811,7 +1230,10 @@ if __name__ == "__main__":
         elif scan_type == "7":
             buat_laporan_kerentanan()
         elif scan_type == "8":
-            buat_laporan_dan_kirim_email() 
+            buat_laporan_dan_kirim_email()
+        elif scan_type == "9":
+            setup_menu()
+
         elif scan_type == "0":
             fitur_info()
         elif scan_type == "99":
