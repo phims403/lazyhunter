@@ -106,11 +106,11 @@ def tampilkan_menu():
     print("  [999] Update Tool")
     print("──────────────────────────────────────────────────────────────────────────────")
     while True:
-        pilihan = input("Choose Feature (0-8, 99, or 999): ").strip()
+        pilihan = input("Choose Feature (0-9, 99, or 999): ").strip()
         if pilihan in ["0","1","2","3","4","5","6","7","8","9","99","999"]:
             return pilihan
 
-        print("[❌] Pilihan tidak valid. Masukkan angka 0-8, 99, atau 999")
+        print("[❌] Pilihan tidak valid. Masukkan angka 0-9, 99, atau 999")
 
 def setup_menu():
     while True:
