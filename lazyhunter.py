@@ -910,7 +910,7 @@ def kirim_file_telegram(path_file, domain):
         return
     try:
         with open(path_file, "rb") as f:
-            response = requests.post(url, data={'chat_id': CHAT_ID}, files={'document': f})
+            response = requests.post(url, data={'chat_id': config.CHAT_ID}, files={'document': f})
         if response.status_code == 200:
             print(f"[✓] File hasil sensitive path {domain} berhasil dikirim ke Telegram.")
         else:
@@ -1123,7 +1123,7 @@ def kirim_laporan_telegram(path_file, domain, max_len=4000):
             chunks.append(current_chunk)
         for i, pesan in enumerate(chunks):
             response = requests.post(url, data={
-                'chat_id': CHAT_ID,
+                'chat_id': config.CHAT_ID,
                 'text': pesan
             })
             if response.status_code == 200:
