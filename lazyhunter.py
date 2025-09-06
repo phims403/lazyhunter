@@ -4,8 +4,8 @@ import shutil
 import requests
 import tempfile
 import random
-import time
-import json
+import time 
+import json 
 import smtplib
 import base64
 import sys
@@ -46,7 +46,7 @@ os.makedirs(OUTPUT_FOLDER_ACTIVE, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_NUCLEI, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_CRAWLED, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_SENSITIVE_DATA, exist_ok=True)
-LOCAL_VERSION = "1.2.1"
+LOCAL_VERSION = "1.2.1.1"
 def get_status_version():
     url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/version.txt"
     headers = {
@@ -898,13 +898,13 @@ def kirim_file_telegram(path_file, domain):
     if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
         print("[ℹ️] Token bot atau chat_id tidak ditemukan / tidak valid. Melewati pengiriman Telegram.")
         return 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+    url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendDocument"
     if not os.path.exists(path_file) or os.stat(path_file).st_size == 0:
         # Jika file kosong → kirim teks saja
         pesan = f"[❌] Tidak ada path sensitive yang terdeteksi untuk {domain}"
         requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            data={'chat_id': CHAT_ID, 'text': pesan}
+            f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage",
+            data={'chat_id': config.CHAT_ID, 'text': pesan}
         )
         print(f"[ℹ️] Tidak ada path sensitive untuk {domain}")
         return
@@ -1112,7 +1112,7 @@ def kirim_laporan_telegram(path_file, domain, max_len=4000):
         header = f"[Laporan untuk {domain}]\n\n"
         chunks = []
         current_chunk = header
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage"
         for line in lines:
             if len(current_chunk) + len(line) > max_len:
                 chunks.append(current_chunk)
@@ -1145,9 +1145,9 @@ def kirim_laporan_telegram_teks_report(path_file):
             isi = file.read()
         if not isi.strip():
             isi = f"[ℹ️] Tidak ada teks laporan."
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage"
         response = requests.post(url, data={
-            'chat_id': CHAT_ID,
+            'chat_id': config.CHAT_ID,
             'text': f"[Text Report]\n\n{isi}"
         })
         if response.status_code == 200:
