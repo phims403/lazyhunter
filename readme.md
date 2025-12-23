@@ -83,6 +83,7 @@ The script will:
   - assetfinder
   - katana
   - gau
+  - waybackurls
   - httpx
   - nuclei
 - Add Go binary path to your shell automatically (permanently)
