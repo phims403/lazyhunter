@@ -1016,6 +1016,42 @@ def process_crawling(target, active_file, wayback_output, gau_output, katana_out
     
     combine_crawling_results(wayback_output, gau_output, katana_output, crawled_filtered_output, target)
 
+def send_telegram_report(file_path, domain, max_len=4000):
+    if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
+        print("[ℹ️] Bot token or chat_id not found / invalid. Skipping Telegram sending.")
+        return
+    if not os.path.exists(file_path):
+        print(f"[⚠️] Report file {file_path} not found.")
+        return
+    try:
+        with open(file_path, "r") as file:
+            lines = file.readlines()
+        if not lines:
+            lines = [f"[❌] No vulnerabilities found for {domain}.\n"]
+        header = f"[Report for {domain}]\n\n"
+        chunks = []
+        current_chunk = header
+        url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage"
+        for line in lines:
+            if len(current_chunk) + len(line) > max_len:
+                chunks.append(current_chunk)
+                current_chunk = line
+            else:
+                current_chunk += line
+        if current_chunk.strip():
+            chunks.append(current_chunk)
+        for i, message in enumerate(chunks):
+            response = requests.post(url, data={
+                'chat_id': config.CHAT_ID,
+                'text': message
+            })
+            if response.status_code == 200:
+                print(f"[✓] Part {i+1} report {domain} successfully sent.")
+            else:
+                print(f"[❌] Failed to send part {i+1} report {domain}: {response.text}")
+                break
+    except Exception as e:
+        print(f"[⚠️] Error occurred while sending to Telegram: {e}")
 
 def send_file_telegram(file_path, domain):
     """Send scan result file to Telegram (sendDocument)."""
@@ -1069,7 +1105,7 @@ def nuclei_js_exposure(target, input_file, output_file, user_agent, scan_args):
             print(e)
             log_error(target, "Nuclei (JS File)", str(e))
             return            
-    send_telegram_report(output_file, f"{target} (JS File)")            
+    send_telegram_report(output_file, f"{target} Nuclei (JS File)")            
 
 def nuclei_param_dast(target, input_file, output_file, user_agent, scan_args):
     try:
@@ -1077,13 +1113,13 @@ def nuclei_param_dast(target, input_file, output_file, user_agent, scan_args):
             return subprocess.Popen([
                 "nuclei", "-l", input_file, "-nh", "-dast", "-fa", "high", "-s", "low,medium,high,critical", "-ept", "ssl", "-timeout", "5", "-retries", "1", *scan_args, "-o", output_file
             ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        run_with_animation("Nuclei DAST MODE", nuclei_dast_mode)
+        run_with_animation("Nuclei (DAST MODE)", nuclei_dast_mode)
     except subprocess.CalledProcessError as e:
-            print("[!] Failed to run Nuclei DAST Mode)")
+            print("[!] Failed to run Nuclei (DAST Mode)")
             print(e)
-            log_error(target, "Nuclei DAST Mode)", str(e))
+            log_error(target, "Nuclei (DAST Mode)", str(e))
             return            
-    send_telegram_report(output_file, f"{target} Nuclei DAST Mode)")            
+    send_telegram_report(output_file, f"{target} Nuclei (DAST Mode)")            
 
 def nuclei_takeover(subdomain_file, output_path_takeover, target):
     try:
@@ -1091,13 +1127,14 @@ def nuclei_takeover(subdomain_file, output_path_takeover, target):
             return subprocess.Popen([
                 "nuclei", "-l", subdomain_file, "-nh", "-tags", "takeover", "-o", output_path_takeover
             ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        run_with_animation("Nuclei Takeover Wildcard", nuclei_takeover_scan)
+        run_with_animation("Nuclei (Takeover Wildcard)", nuclei_takeover_scan)
     except subprocess.CalledProcessError as e:
-            print("[!] Failed to run Nuclei Takeover Wildcard)")
+            print("[!] Failed to run Nuclei (Takeover Wildcard)")
             print(e)
-            log_error(target, "Nuclei Takeover Wildcard)", str(e))
+            log_error(target, "Nuclei (Takeover Wildcard)", str(e))
             return            
-    send_telegram_report(output_path_takeover, f"Takeover Wildcard ({target})")            
+    send_telegram_report(output_path_takeover, f"({target}) Nuclei (Takeover Wildcard)") 
+
 def takeover():
     while True:
         print("\n=== Takeover Mode ===")
@@ -1167,7 +1204,6 @@ def dark_deep(mode):
         katana_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"katana_{target}.txt")
         wayback_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"wayback_{target}.txt")
         gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"gau{target}.txt")
-        nuclei_output_crawled = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_{target}_crawled.txt")
         crawled_filtered_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"crawled_filtered_{target}.txt")
         temp_crawled_filtered_output = os.path.join (OUTPUT_FOLDER_CRAWLED, f"temp_crawled_filtered_{target}.txt")
         user_agent = random.choice(USER_AGENTS)
@@ -1175,6 +1211,7 @@ def dark_deep(mode):
         js_output = os.path.join(OUTPUT_FOLDER_GREP, f"js_{target}.txt")
         nuclei_output_js = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_exp_{target}.txt")
         nuclei_output_param = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_dast_{target}.txt")
+        output_path_takeover = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
         print(f"\n[▶] Starting process for {target}")
         start_time_url = time.time()
         finding_subdomain(target, subdomain_file)
@@ -1199,17 +1236,7 @@ def dark_deep(mode):
             nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
             nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
             nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
-            output_path_takeover = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
-            print(f"[🚨] Running nuclei takeover scan for: {target}")
-            try:
-                subprocess.run([
-                    "nuclei", "-l", subdomain_file, "-nh", "-t", "takeovers", "-o", output_path_takeover
-                ], check=True)
-
-                print(f"[✓] Scan completed. Results at: {output_path_takeover}")
-                send_telegram_report(output_path_takeover, f"{target} (Deep Scan - Takeover)")
-            except subprocess.CalledProcessError:
-                print(f"[❌] Failed to run nuclei takeover scan for {target}")
+            nuclei_takeover(subdomain_file, output_path_takeover, target)
         else:
             print(f"[!] Unknown scan mode: {mode}")
             return
@@ -1219,7 +1246,7 @@ def dark_deep(mode):
         minutes, seconds = divmod(remaining, 60)
         print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
         print(f"[✓] All processes completed for target: {target}")
-
+  
 
 def feature_update_tool():
     VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/version.txt"
