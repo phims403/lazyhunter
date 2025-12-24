@@ -4,12 +4,12 @@ echo "════════════════════════�
 echo " LAZYHUNTER Setup Script - Install Tools"
 echo "══════════════════════════════════════════════"
 
-# Version comparison function
+
 version_lt() {
     [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" != "$2" ]
 }
 
-# OS detection function
+
 detect_os() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/debian_version ]; then
@@ -28,7 +28,7 @@ detect_os() {
     fi
 }
 
-# Install Python & pip function
+
 install_python_pip() {
     echo "[*] Installing Python & pip..."
     OS=$(detect_os)
@@ -60,7 +60,6 @@ install_python_pip() {
             ;;
     esac
     
-    # Verify installation
     if command -v python3 &> /dev/null && command -v pip3 &> /dev/null; then
         echo "[✓] Python & pip successfully installed"
         python3 --version
@@ -71,11 +70,10 @@ install_python_pip() {
     fi
 }
 
-# Install latest Golang function
+
 install_golang() {
     echo "[*] Installing latest Golang from official website..."
     
-    # Detect architecture
     ARCH=$(uname -m)
     case $ARCH in
         x86_64) ARCH="amd64" ;;
@@ -87,7 +85,6 @@ install_golang() {
             ;;
     esac
     
-    # Detect OS
     OS=$(detect_os)
     case $OS in
         "debian"|"redhat"|"arch"|"linux")
@@ -102,7 +99,6 @@ install_golang() {
             ;;
     esac
     
-    # Get latest Go version
     echo "[*] Checking latest Go version..."
     LATEST_VERSION=$(curl -s https://go.dev/VERSION?m=text)
     if [ -z "$LATEST_VERSION" ]; then
@@ -117,7 +113,6 @@ install_golang() {
     echo "[*] Downloading Go ${LATEST_VERSION} for ${OS}-${ARCH}..."
     echo "    URL: $DOWNLOAD_URL"
     
-    # Download Go
     if ! wget --quiet --show-progress "$DOWNLOAD_URL" -O "/tmp/${FILENAME}"; then
         echo "[❌] Failed to download Go. Check internet connection or try manually:"
         echo "    $DOWNLOAD_URL"
@@ -126,30 +121,24 @@ install_golang() {
     
     echo "[✓] Download successful"
     
-    # Remove old installation if exists
     if [ -d "/usr/local/go" ]; then
         echo "[*] Removing old Go installation..."
         sudo rm -rf /usr/local/go
     fi
     
-    # Extract Go to /usr/local
     echo "[*] Extracting Go to /usr/local..."
     if ! sudo tar -C /usr/local -xzf "/tmp/${FILENAME}"; then
         echo "[❌] Failed to extract Go"
         return 1
     fi
     
-    # Add to PATH
     echo "[*] Adding Go to PATH..."
     
-    # Get current user home directory
     USER_HOME=$(eval echo ~$(logname 2>/dev/null || echo $USER))
     
-    # Check if Go is already in PATH in shell config
     GO_PATH_EXPORT='export PATH=$PATH:/usr/local/go/bin'
     SHELL_RC=""
     
-    # Detect shell and config file
     CURRENT_SHELL=$(basename "$SHELL")
     case "$CURRENT_SHELL" in
         "bash")
@@ -164,12 +153,10 @@ install_golang() {
             ;;
     esac
     
-    # Create config directory if needed (for fish)
     if [ "$CURRENT_SHELL" = "fish" ]; then
         mkdir -p "$(dirname "$SHELL_RC")"
     fi
     
-    # Add to shell config
     if [ -n "$SHELL_RC" ]; then
         if [ -f "$SHELL_RC" ]; then
             if ! grep -q "/usr/local/go/bin" "$SHELL_RC"; then
@@ -184,20 +171,16 @@ install_golang() {
         fi
     fi
     
-    # Set PATH for current session with absolute path
     export PATH="/usr/local/go/bin:$PATH"
     
-    # Verify Go is in PATH for current session
     if /usr/local/go/bin/go version &> /dev/null; then
         echo "[✓] Go active in current session"
     else
         echo "[⚠] Go not active, restart terminal or manually set PATH"
     fi
     
-    # Clean up
     rm -f "/tmp/${FILENAME}"
     
-    # Verify installation
     if command -v go &> /dev/null; then
         INSTALLED_VERSION=$(go version | awk '{print $3}')
         echo "[✓] Golang successfully installed: $INSTALLED_VERSION"
@@ -211,7 +194,7 @@ install_golang() {
     fi
 }
 
-# Check and install Golang if needed
+
 check_and_install_golang() {
     MIN_GO_VERSION="1.24"
     
@@ -221,9 +204,8 @@ check_and_install_golang() {
         return $?
     fi
 
-    # Get Go version from `go version` output, e.g: go1.24.0
-    GO_VERSION_RAW=$(go version | awk '{print $3}')   # ex: go1.24.0
-    GO_VERSION=${GO_VERSION_RAW#go}                   # remove 'go' prefix
+    GO_VERSION_RAW=$(go version | awk '{print $3}')
+    GO_VERSION=${GO_VERSION_RAW#go}
 
     if version_lt "$GO_VERSION" "$MIN_GO_VERSION"; then
         echo "[❌] Current Go version is $GO_VERSION, less than $MIN_GO_VERSION"
@@ -236,7 +218,7 @@ check_and_install_golang() {
     return 0
 }
 
-# Install Python dependencies
+
 install_python_dependencies() {
     echo "[*] Installing Python dependencies from requirements.txt..."
     
@@ -245,19 +227,16 @@ install_python_dependencies() {
         return 1
     fi
     
-    # Check if pip is available
     if ! command -v pip3 &> /dev/null && ! command -v pip &> /dev/null; then
         echo "[❌] pip not found. Please install pip first."
         return 1
     fi
     
-    # Use pip3 if available, else pip
     PIP_CMD="pip3"
     if ! command -v pip3 &> /dev/null; then
         PIP_CMD="pip"
     fi
     
-    # Install dependencies
     $PIP_CMD install -r requirements.txt
     if [ $? -eq 0 ]; then
         echo "[✓] Python dependencies successfully installed"
@@ -267,11 +246,10 @@ install_python_dependencies() {
     fi
 }
 
-# Check system httpx
+
 check_system_httpx() {
     echo "[*] Checking httpx installed on system..."
     
-    # Check if httpx exists in system
     if command -v httpx &> /dev/null; then
         HTTPX_PATH=$(which httpx)
         HTTPX_VERSION=$(httpx -version 2>/dev/null | head -1)
@@ -280,7 +258,6 @@ check_system_httpx() {
         echo "    Location: $HTTPX_PATH"
         echo "    Version: $HTTPX_VERSION"
         
-        # Check if httpx is Python-based (not from ProjectDiscovery)
         if echo "$HTTPX_PATH" | grep -q "python\|pip\|site-packages" || ! echo "$HTTPX_VERSION" | grep -q "projectdiscovery"; then
             echo ""
             echo "[⚠️]  WARNING: Detected httpx that is not from ProjectDiscovery!"
@@ -296,7 +273,6 @@ check_system_httpx() {
             
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
                 echo "[*] Removing system httpx..."
-                # Try uninstall if from pip
                 if command -v pip3 &> /dev/null; then
                     pip3 uninstall -y httpx 2>/dev/null
                 fi
@@ -304,7 +280,6 @@ check_system_httpx() {
                     pip uninstall -y httpx 2>/dev/null
                 fi
                 
-                # Try remove if from package manager
                 if command -v apt &> /dev/null; then
                     sudo apt remove -y httpx 2>/dev/null
                 elif command -v yum &> /dev/null; then
@@ -313,7 +288,6 @@ check_system_httpx() {
                     sudo pacman -R --noconfirm httpx 2>/dev/null
                 fi
                 
-                # Check again if still exists
                 if command -v httpx &> /dev/null; then
                     echo "[!] httpx still found. You may need to remove manually:"
                     echo "    sudo rm -f $(which httpx)"
@@ -339,13 +313,12 @@ check_system_httpx() {
     return 0
 }
 
-# Check all required tools
+
 check_all_tools() {
     echo "[*] Checking availability of all required tools..."
     
     TOOLS_STATUS=()
     
-    # Check Python
     if command -v python3 &> /dev/null; then
         PYTHON_VERSION=$(python3 --version 2>&1)
         TOOLS_STATUS+=("Python3: ✓ $PYTHON_VERSION")
@@ -353,7 +326,6 @@ check_all_tools() {
         TOOLS_STATUS+=("Python3: ✗ Not installed")
     fi
     
-    # Check pip
     if command -v pip3 &> /dev/null; then
         PIP_VERSION=$(pip3 --version 2>&1)
         TOOLS_STATUS+=("pip3: ✓ $PIP_VERSION")
@@ -364,7 +336,6 @@ check_all_tools() {
         TOOLS_STATUS+=("pip: ✗ Not installed")
     fi
     
-    # Check Go
     if command -v go &> /dev/null; then
         GO_VERSION=$(go version 2>&1)
         GO_PATH=$(which go)
@@ -374,7 +345,6 @@ check_all_tools() {
         TOOLS_STATUS+=("Go: ✗ Not installed")
     fi
     
-    # Check Go-based tools
     for tool in subfinder httpx nuclei katana assetfinder gau waybackurls; do
         if command -v "$tool" &> /dev/null; then
             TOOL_VERSION=$("$tool" -version 2>/dev/null | head -1 || echo "Unknown version")
@@ -395,13 +365,12 @@ check_all_tools() {
     echo ""
 }
 
-# Fungsi untuk cek semua tools yang dibutuhkan
+
 check_all_tools() {
     echo "[*] Mengecek ketersediaan semua tools yang dibutuhkan..."
     
     TOOLS_STATUS=()
     
-    # Cek Python
     if command -v python3 &> /dev/null; then
         PYTHON_VERSION=$(python3 --version 2>&1)
         TOOLS_STATUS+=("Python3: ✓ $PYTHON_VERSION")
@@ -409,7 +378,6 @@ check_all_tools() {
         TOOLS_STATUS+=("Python3: ✗ Tidak terinstall")
     fi
     
-    # Cek pip
     if command -v pip3 &> /dev/null; then
         PIP_VERSION=$(pip3 --version 2>&1)
         TOOLS_STATUS+=("pip3: ✓ $PIP_VERSION")
@@ -420,7 +388,6 @@ check_all_tools() {
         TOOLS_STATUS+=("pip: ✗ Tidak terinstall")
     fi
     
-    # Cek Go
     if command -v go &> /dev/null; then
         GO_VERSION=$(go version 2>&1)
         GO_PATH=$(which go)
@@ -430,7 +397,6 @@ check_all_tools() {
         TOOLS_STATUS+=("Go: ✗ Tidak terinstall")
     fi
     
-    # Cek Go-based tools
     for tool in subfinder httpx nuclei katana assetfinder gau waybackurls; do
         if command -v "$tool" &> /dev/null; then
             TOOL_VERSION=$("$tool" -version 2>/dev/null | head -1 || echo "Unknown version")
@@ -451,17 +417,15 @@ check_all_tools() {
     echo ""
 }
 
-# Install additional tools (Go-based)
+
 install_additional_tools() {
     echo "[*] Installing additional Go-based tools..."
     
-    # Ensure Go is installed
     if ! check_and_install_golang; then
         echo "[❌] Failed to ensure Go is installed. Cannot continue with tools installation."
         return 1
     fi
     
-    # Check system httpx
     if ! check_system_httpx; then
         echo "[❌] Installation cancelled due to httpx conflict"
         return 1
@@ -487,7 +451,6 @@ install_additional_tools() {
         fi
     done
     
-    # Update nuclei templates
     echo "[*] Updating nuclei templates..."
     if command -v nuclei &> /dev/null; then
         nuclei -update-templates
@@ -496,16 +459,14 @@ install_additional_tools() {
         echo "[!] Nuclei not found, skipping template update"
     fi
     
-    # Add $HOME/go/bin to PATH
     add_go_to_path
 }
 
-# Add Go bin to PATH
+
 add_go_to_path() {
     GO_BIN_PATH="$HOME/go/bin"
     export PATH="$PATH:$GO_BIN_PATH"
     
-    # Detect shell and add PATH permanently
     echo "[*] Detecting shell to add PATH permanently..."
     
     SHELL_NAME=$(basename "$SHELL")
@@ -544,32 +505,28 @@ add_go_to_path() {
     fi
 }
 
-# Install all (Install All)
+
 install_all() {
     echo "[*] Starting complete LazyHunter installation..."
     
-    # 1. Install Python & pip
     echo "[1/4] Install Python & pip"
     if ! install_python_pip; then
         echo "[❌] Failed to install Python & pip"
         return 1
     fi
     
-    # 2. Install Golang
     echo "[2/4] Install Golang"
     if ! check_and_install_golang; then
         echo "[❌] Failed to install Golang"
         return 1
     fi
     
-    # 3. Install Python dependencies
     echo "[3/4] Install Python dependencies"
     if ! install_python_dependencies; then
         echo "[❌] Failed to install Python dependencies"
         return 1
     fi
     
-    # 4. Install additional tools
     echo "[4/4] Install additional tools"
     if ! install_additional_tools; then
         echo "[❌] Failed to install additional tools"
@@ -590,7 +547,7 @@ install_all() {
 
 
 
-# Main menu
+
 show_menu() {
     echo ""
     echo "Select installation option:"
@@ -604,7 +561,7 @@ show_menu() {
     echo ""
 }
 
-# Main program
+
 main() {
     while true; do
         show_menu
@@ -643,5 +600,4 @@ main() {
     done
 }
 
-# Run main function
 main
