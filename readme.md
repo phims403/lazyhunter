@@ -60,6 +60,41 @@ is an automation recon tool for bug hunters who want to work fast and efficientl
 
 ---
 
+
+• Telegram Notification
+• Automatic folder structure for scan results
+• Access to target lists from bug bounty platforms such as
+- hackerone
+- bugcrowd
+- yeswehack
+- intigriti
+- hackenproof
+
+  | File                             | Number of domainss |
+  |----------------------------------|-------------------|
+  | hackerone_bounty.txt             | 769 domains        |
+  | hackerone_swag_vdp.txt           | 656 domains        |
+  | bugcrowd_bounty.txt              | 255 domains        |
+  | bugcrowd_swag_vdp.txt            | 183 domains        |
+  | hackenproof_bounty.txt           | 86 domains         |
+  | hackenproof_swag_vdp.txt         | 0 domains (empty) |
+  | yeswehack_bounty.txt             | 68 domains         |
+  | yeswehack_swag_vdp.txt           | 0 domains (empty) |
+  | intigriti_bounty.txt             | 45 domains         |
+  | intigriti_swag_vdp.txt           | 23 domains         |
+  | immunefi_bounty.txt              | 5 domains          |
+  | immunefi_swag_vdp.txt            | 0 domains (empty) |
+  | bugv_bounty.txt                  | 8 domains          |
+  | bugv_swag_vdp.txt                | 0 domains (empty) |
+  | bugbase_bounty.txt               | 3 domains          |
+  | bugbase_swag_vdp.txt             | 0 domains (empty) |
+  | self_hosted_program_bounty.txt   | 354 domains        |
+  | self_hosted_program_swag_vdp.txt | 1,625 domains      |
+
+  Total: 4,430 domains across 18 files
+
+source: https://github.com/projectdiscovery/public-bugbounty-programs
+
 # How to Use LAZYHUNTER
 ## 📦 1. Installation Using Git Clone
 First, clone the repository from GitHub:
@@ -105,11 +140,11 @@ select the desired feature
 
 ---
 
-##  • how to create telegram bot and get token and chat id
+## • How to create Telegram bot and get token and chat id
 ### watch this
 #### https://drive.google.com/file/d/12J-PEJcvJuv7PpX1DXBWQOCIQFcMIyeu/view?usp=drivesdk
 
-## • how to create gmail password for config.py
+## • How to create Gmail password for config.py
 ### watch this
 #### https://drive.google.com/file/d/12F5cYBm8b5KVKkKmsa_1Yenfrqvcv5IG/view?usp=drivesdk
 ---
