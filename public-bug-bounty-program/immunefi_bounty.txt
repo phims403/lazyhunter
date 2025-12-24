@@ -1,0 +1,5 @@
+hakka.finance
+igain.finance
+lido.fi
+makerdao.com
+wombat.exchange
