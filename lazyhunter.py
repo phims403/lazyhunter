@@ -56,9 +56,9 @@ def get_status_version():
         if response.status_code == 200:
             decoded = response.text.strip()
             if decoded == LOCAL_VERSION:
-                return f"{LOCAL_VERSION} (\033[92mupdated\033[0m)"  # green
+                return f"{LOCAL_VERSION} (\033[92mupdated\033[0m)"
             else:
-                return f"{LOCAL_VERSION} (\033[91moutdate\033[0m)"  # red
+                return f"{LOCAL_VERSION} (\033[91moutdate\033[0m)"
         else:
             print("[DEBUG] Failed to get content.")
             return f"{LOCAL_VERSION} (\033[93munknown\033[0m)"
@@ -155,7 +155,7 @@ def setup_menu():
             new_limit = input(f"Enter subdomain limit for Katana (currently {current_limit}): ").strip()
             if new_limit.isdigit():
                 if new_limit == "00":
-                    write_config({"KATANA_LIMIT": 0})  # 0 means unlimited in the application logic
+                    write_config({"KATANA_LIMIT": 0})
                     print("[✓] Katana set to unlimited mode (limit set to 00).")
                 else:
                     new_limit_int = int(new_limit)
@@ -207,11 +207,9 @@ def run_with_animation(message, func, *args, **kwargs):
     console.print(f"[bright_blue][+] {message}...[/bright_blue]")
     result = func(*args, **kwargs)
     if isinstance(result, subprocess.Popen):
-        # Use rich status while process is running
         with Status(f"[bold bright_blue]Running {message}[/bold bright_blue]", console=console) as status:
             for line in iter(result.stdout.readline, ''):
                 if line:
-                    # Display original output without additional colors (highlight=False)
                     console.print(line.rstrip(), highlight=False)
             result.wait()
     else:
@@ -239,7 +237,7 @@ def run_with_animation_no_output(message, func, tool_name=None, label="Item", ou
         if count > 0:
             found_text = Text()
             found_text.append(" Found ", style="bright_blue")
-            found_text.append(str(count), style="yellow")  # Yellow number
+            found_text.append(str(count), style="yellow")
             found_text.append(f" {label}", style="bright_blue")
             base_text.append(found_text)
         
@@ -271,7 +269,6 @@ def run_with_animation_no_output(message, func, tool_name=None, label="Item", ou
 
             result.wait()
 
-        # Final verification
         if output_file and os.path.exists(output_file):
             try:
                 with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
@@ -279,13 +276,12 @@ def run_with_animation_no_output(message, func, tool_name=None, label="Item", ou
             except:
                 pass
 
-    # === FINAL MESSAGE: COLORS AS DESIRED ===
     final_text = Text()
-    final_text.append("[✓] ", style="yellow")                    # Green checkmark
-    final_text.append(tool_name, style="bright_blue")                  # Blue tool name
-    final_text.append(" Found ", style="bright_blue")     # Blue text
-    final_text.append(str(count), style="yellow")               # Yellow number (same as checkmark)
-    final_text.append(f" {label}", style="bright_blue")                # Blue label
+    final_text.append("[✓] ", style="yellow")
+    final_text.append(tool_name, style="bright_blue")
+    final_text.append(" Found ", style="bright_blue")
+    final_text.append(str(count), style="yellow")
+    final_text.append(f" {label}", style="bright_blue")
     console.print(final_text)
 
 def feature_info():
@@ -417,7 +413,6 @@ def write_config(updates: dict):
             content += "\n" + replacement + "\n"
     with open(cfg_path, "w", encoding="utf-8") as f:
         f.write(content)
-    # reload module so runtime uses current config
     importlib.reload(config)
     print("[✓] config.py updated and reloaded.")
 
@@ -437,15 +432,13 @@ def get_tool_args(tool_name: str):
     if not s:
         return None
     return SPEED_ARGS[s].get(tool_name)
-# --------------------------------------------------------------------
+
 
 def ask_scan_speed():
-    # check config
     speed = get_speed()
     if speed:
         print(f"[ℹ️] Scan speed ->{speed}")
         return SPEED_ARGS[speed]["nuclei"]
-    # if not exists (empty / None), then ask user
     choice = input("\nSelect Scanning Speed: 1.Low, 2.Standard, 3.Fast: ").strip()
     if choice == "1":
         return SPEED_ARGS["low"]["nuclei"]
@@ -473,7 +466,6 @@ def extract_domain_from_url(url):
     domain = parsed.netloc
     if domain.startswith("www."):
         domain = domain[4:]
-    # Remove port if present
     domain = domain.split(':')[0]
     return domain
 
@@ -482,11 +474,9 @@ def is_subdomain_of_base_domain(domain, base_domain):
     domain = domain.lower()
     base_domain = base_domain.lower()
     
-    # Direct match
     if domain == base_domain:
         return True
     
-    # Subdomain match (e.g., app.example.com is subdomain of example.com)
     if domain.endswith('.' + base_domain):
         return True
     
@@ -503,17 +493,14 @@ def filter_domains_from_base_domain(input_file, base_domain, output_file):
         if not line:
             continue
         
-        # Extract domain from URL or use as-is for subdomain
         if line.startswith(('http://', 'https://')):
             domain = extract_domain_from_url(line)
         else:
             domain = line
         
-        # Check if it's subdomain of base domain
         if is_subdomain_of_base_domain(domain, base_domain):
             filtered_lines.append(line)
     
-    # Write filtered results to output file
     with open(output_file, 'w', encoding='utf-8') as f:
         for line in filtered_lines:
             f.write(line + '\n')
@@ -597,7 +584,6 @@ def find_sensitive_data(target):
     gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"gau_{target}.txt")
     crawling_gau(gau_output, target)
     
-    # Filter the gau output to only include URLs from the target domain
     gau_filtered = gau_output + ".tmp"
     import shutil
     shutil.copy(gau_output, gau_filtered)
@@ -609,7 +595,6 @@ def find_sensitive_data(target):
 def check_sensitive_urls(target, input_file):
     httpx_args = get_tool_args("httpx_sensitive") or ["-silent", "-mc", "200,403", "-t", "300", "-rate-limit", "1000", "-retries", "3", "-timeout", "10"]
     
-    # First, filter the input file to only include URLs from the target domain
     filtered_input_file = input_file + ".filtered"
     filter_domains_from_base_domain(input_file, target, filtered_input_file)
     
@@ -633,10 +618,9 @@ def check_sensitive_urls(target, input_file):
                         urls.append(url)
         if not urls:
             print(f"[ℹ️] No sensitive URLs found for {target}")
-            # Clean up temporary file
             if os.path.exists(filtered_input_file):
                 os.remove(filtered_input_file)
-            return []  # Return empty list if none
+            return []
 
         with open(pot_sen_file, "w") as f:
             for url in urls:
@@ -657,22 +641,19 @@ def check_sensitive_urls(target, input_file):
             label="Potential Sensitive URLs",
             output_file=sen_file
         )
-        # Read active sensitive URLs from sen_file
         sensitive_urls = []
         if os.path.exists(sen_file):
             with open(sen_file, "r", encoding="utf-8", errors="ignore") as f:
                 sensitive_urls = [line.strip() for line in f if line.strip()]
         
-        # Clean up temporary file
         if os.path.exists(filtered_input_file):
             os.remove(filtered_input_file)
         
-        return sensitive_urls  # Return URL list for further processing
+        return sensitive_urls
     except subprocess.CalledProcessError as e:
         print("[!] Failed running Httpx")
         print(e)
         log_error(target, "Httpx sensitive data", str(e))
-        # Clean up temporary file
         if os.path.exists(filtered_input_file):
             os.remove(filtered_input_file)
         return []
@@ -682,7 +663,6 @@ def check_sensitive_urls(target, input_file):
 
 
 def log_error(target, process, error_message, error_log_file="error.log"):
-    # Create error file if not exists
     if not os.path.exists(error_log_file):
         with open(error_log_file, "w", encoding="utf-8") as f:
             f.write("=== Tool Error Log ===\n\n")
@@ -708,7 +688,6 @@ def read_file_real_time(tool_name, file_path, label, process):
 
     count = 0
     try:
-        # wait for file to appear
         while not os.path.exists(file_path):
             time.sleep(0.1)
 
@@ -724,7 +703,6 @@ def read_file_real_time(tool_name, file_path, label, process):
 
                 count += 1
                 msg = f"[+] Running {tool_name} found \033[93m{count}\033[94m {label}..."
-                # remove \n to prevent new lines
                 sys.stdout.write("\r" + msg + " " * 20)  
                 sys.stdout.flush()
 
@@ -741,10 +719,8 @@ def finding_subdomain(target, subdomain_file):
     running_subfinder(target, temp_subdomain_file)
     running_assetfinder(target, temp_subdomain_file)
     
-    # Filter the subdomains to only include those from the base target domain
     filter_subdomains_from_file(temp_subdomain_file, target, subdomain_file)
     
-    # Remove temporary file
     if os.path.exists(temp_subdomain_file):
         os.remove(temp_subdomain_file) 
 
@@ -793,19 +769,15 @@ def running_assetfinder(target, subdomain_file):
     for path in [subdomain_file, assetfinder_tmp]:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             all_subs.update(line.strip() for line in f if line.strip())
-    # --- ADD MAIN DOMAIN TO SUBDOMAIN FILE ---
     subdomain_set = set()
-    # Read existing subdomains
     if os.path.exists(subdomain_file):
         with open(subdomain_file, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
                 sub = line.strip()
                 if sub:
                     subdomain_set.add(sub)
-    # Add main domain (only host, without http/https/path/port)
     target_clean = target.split("://")[-1].split("/")[0].split(":")[0]
     subdomain_set.add(target_clean)
-    # Rewrite subdomain file
     with open(subdomain_file, "w", encoding="utf-8") as f:
         for sub in sorted(subdomain_set):
             f.write(sub + "\n")        
@@ -848,11 +820,10 @@ def process_crawling(target, active_file, wayback_output, gau_output, katana_out
 def crawling_wayback(wayback_output, active_file, target):
     try:
         def run_waybackurls():
-            # Command as STRING + shell=True
             cmd = f"cat {active_file} | waybackurls"
             return subprocess.Popen(
                 cmd,
-                shell=True,  # <--- REQUIRED!
+                shell=True,
                 stdout=open(wayback_output, "w", encoding="utf-8"),
                 stderr=subprocess.DEVNULL
             )
@@ -905,7 +876,7 @@ def crawling_katana(katana_output, input_file, target):
     if limit == 0:
         print(f"\033[94m[ℹ️] Katana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
         with open(katana_output, "w") as f:
-            f.write("")  # Create empty file for consistency
+            f.write("")
         return
 
     with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -916,14 +887,9 @@ def crawling_katana(katana_output, input_file, target):
         with open(limited_file, "w") as f:
             for sub in alive_subs[:limit]:
                 f.write(sub + "\n")
-        #[+] Active subdomains ≥ {limit}, only using {limit} active subdomains
-        #print(f"\033[94m[+] Active subdomains ≥ {limit}, only using {limit} active subdomains\033[0m")
         input_for_katana = limited_file
     else:
-        #[+] Active subdomains < {limit}, directly use entire file for Katana scan
         input_for_katana = input_file
-
-    #[+] Starting crawling process with Katana...
 
     try:
         def run_katana():
@@ -980,16 +946,13 @@ def combine_crawling_results(wayback_output, gau_output, katana_output, crawled_
             f.write(url + "\n")
  
 def separate_urls(crawled_filtered_output, param_output, js_output, target):
-    # Extract target from output file path to get target domain
-    # The target is the domain part from the crawled_filtered_output path
     import re
     target_match = re.search(r'crawled_filtered_(.*)\.txt', os.path.basename(crawled_filtered_output))
     if target_match:
         actual_target = target_match.group(1)
     else:
-        actual_target = target  # fallback to provided target
+        actual_target = target
     
-    # Filter the crawled URLs to only include those from the target domain
     filtered_crawled_file = crawled_filtered_output + ".filtered"
     filter_domains_from_base_domain(crawled_filtered_output, actual_target, filtered_crawled_file)
     
@@ -1009,7 +972,6 @@ def separate_urls(crawled_filtered_output, param_output, js_output, target):
         for url in js_urls:
             f.write(url + "\n")
     
-    # Clean up temporary file
     if os.path.exists(filtered_crawled_file):
         os.remove(filtered_crawled_file)
     
@@ -1017,7 +979,6 @@ def separate_urls(crawled_filtered_output, param_output, js_output, target):
     print(f"\033[33m[✓]\033[94m Successfully found \033[33m{len(js_urls)}\033[94m URLs .js\033[0m")
 
 def process_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output):
-    # Process crawling for each tool
     crawling_wayback(wayback_output, active_file, target)
     crawling_gau(gau_output, target)
     with open(active_file, "r", encoding="utf-8", errors="ignore") as f:
@@ -1027,7 +988,7 @@ def process_crawling(target, active_file, wayback_output, gau_output, katana_out
     if len(alive_subs) >= limit:
         limited_file = os.path.join(os.path.dirname(active_file), f"{limit}active_{target}.txt")
         with open(limited_file, "w") as f:
-            for sub in alive_subs[:limit]:  # take according to limit
+            for sub in alive_subs[:limit]:
                 f.write(sub + "\n")
         print(f"\033[94m[+] Active subdomains ≥ {limit}, only using {limit} active subdomains\033[0m")
         input_for_katana = limited_file
@@ -1036,23 +997,19 @@ def process_crawling(target, active_file, wayback_output, gau_output, katana_out
         input_for_katana = active_file
     crawling_katana(katana_output, input_for_katana, target)
     
-    # Filter each crawling result to only include URLs from the target domain
     wayback_filtered = wayback_output + ".tmp"
     gau_filtered = gau_output + ".tmp"
     katana_filtered = katana_output + ".tmp"
     
-    # Copy original files to temporary files for filtering
     import shutil
     shutil.copy(wayback_output, wayback_filtered)
     shutil.copy(gau_output, gau_filtered)
     shutil.copy(katana_output, katana_filtered)
     
-    # Filter each crawling result
     filter_domains_from_base_domain(wayback_filtered, target, wayback_output)
     filter_domains_from_base_domain(gau_filtered, target, gau_output)
     filter_domains_from_base_domain(katana_filtered, target, katana_output)
     
-    # Remove temporary files
     os.remove(wayback_filtered)
     os.remove(gau_filtered)
     os.remove(katana_filtered)
@@ -1067,7 +1024,6 @@ def send_file_telegram(file_path, domain):
         return 
     url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendDocument"
     if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
-        # If file empty → send text only
         message = f"[❌] No sensitive path detected for {domain}"
         requests.post(
             f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage",
