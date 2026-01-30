@@ -1,1 +1,4 @@
-
+lazyhunter.py
+readme.md
+setup.sh
+requirements.txt
