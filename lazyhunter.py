@@ -4,8 +4,8 @@ import shutil
 import requests
 import tempfile
 import random
-import time 
-import json 
+import time
+import json
 import base64
 import sys
 import datetime
@@ -20,6 +20,7 @@ import socket
 import config
 import re
 import importlib
+import argparse
 
 from rich.console import Console
 from rich.status import Status
@@ -32,17 +33,137 @@ def token_valid(token):
     return token.startswith("bot") or (len(token) > 30 and ":" in token)
 def chat_id_valid(chat_id):
     return chat_id.lstrip("-").isdigit()
+
+def check_previous_scan(target):
+    """
+    Check if target has been previously scanned by looking for output files
+    Returns a dictionary with file status information
+    """
+    scan_status = {
+        'subdomain_file': None,
+        'active_file': None,
+        'nuclei_output': None,
+        'wayback_output': None,
+        'gau_output': None,
+        'katana_output': None,
+        'crawled_filtered_output': None,
+        'param_output': None,
+        'js_output': None,
+        'nuclei_output_js': None,
+        'nuclei_output_param': None,
+        'output_path_takeover': None,
+        'has_any_files': False
+    }
+
+    subdomain_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
+    if os.path.exists(subdomain_file):
+        scan_status['subdomain_file'] = subdomain_file
+        scan_status['has_any_files'] = True
+
+    active_file = os.path.join(OUTPUT_FOLDER_ACTIVE, f"active_{target}.txt")
+    if os.path.exists(active_file):
+        scan_status['active_file'] = active_file
+        scan_status['has_any_files'] = True
+
+    nuclei_output = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_active_{target}.txt")
+    if os.path.exists(nuclei_output):
+        scan_status['nuclei_output'] = nuclei_output
+        scan_status['has_any_files'] = True
+
+    wayback_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"wayback_{target}.txt")
+    if os.path.exists(wayback_output):
+        scan_status['wayback_output'] = wayback_output
+        scan_status['has_any_files'] = True
+
+    gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"gau_{target}.txt")
+    if os.path.exists(gau_output):
+        scan_status['gau_output'] = gau_output
+        scan_status['has_any_files'] = True
+
+    katana_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"katana_{target}.txt")
+    if os.path.exists(katana_output):
+        scan_status['katana_output'] = katana_output
+        scan_status['has_any_files'] = True
+
+    crawled_filtered_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"crawled_filtered_{target}.txt")
+    if os.path.exists(crawled_filtered_output):
+        scan_status['crawled_filtered_output'] = crawled_filtered_output
+        scan_status['has_any_files'] = True
+
+    param_output = os.path.join(OUTPUT_FOLDER_GREP, f"param_{target}.txt")
+    if os.path.exists(param_output):
+        scan_status['param_output'] = param_output
+        scan_status['has_any_files'] = True
+
+    js_output = os.path.join(OUTPUT_FOLDER_GREP, f"js_{target}.txt")
+    if os.path.exists(js_output):
+        scan_status['js_output'] = js_output
+        scan_status['has_any_files'] = True
+
+    nuclei_output_js = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_exp_{target}.txt")
+    if os.path.exists(nuclei_output_js):
+        scan_status['nuclei_output_js'] = nuclei_output_js
+        scan_status['has_any_files'] = True
+
+    nuclei_output_param = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_dast_{target}.txt")
+    if os.path.exists(nuclei_output_param):
+        scan_status['nuclei_output_param'] = nuclei_output_param
+        scan_status['has_any_files'] = True
+
+    output_path_takeover = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
+    if os.path.exists(output_path_takeover):
+        scan_status['output_path_takeover'] = output_path_takeover
+        scan_status['has_any_files'] = True
+
+    return scan_status
+
+def ask_continue_or_restart(target, scan_status):
+    """
+    Ask user whether to continue previous scan or restart
+    """
+    print(f"\n[⚠️] Previous scan files found for target '{target}'")
+    print("Files found:")
+    for key, value in scan_status.items():
+        if key != 'has_any_files' and value is not None:
+            file_size = os.path.getsize(value)
+            print(f"  - {value} ({file_size} bytes)")
+
+    while True:
+        choice = input(f"\n[?] Target '{target}' has been partially scanned. Continue previous scan (c), restart (r), or see details (d)? ").strip().lower()
+        if choice in ['c', 'continue']:
+            return 'continue'
+        elif choice in ['r', 'restart']:
+            return 'restart'
+        elif choice in ['d', 'details']:
+            print("\n[ℹ️] Scan Progress Analysis:")
+            if scan_status['output_path_takeover']:
+                print("  - Subdomain takeover check completed")
+            if scan_status['nuclei_output_param'] or scan_status['nuclei_output_js']:
+                print("  - Nuclei scanning (DAST/Exposure) completed")
+            if scan_status['param_output'] or scan_status['js_output']:
+                print("  - URL separation (parameters/JS) completed")
+            if scan_status['crawled_filtered_output']:
+                print("  - Crawling filtering completed")
+            if scan_status['katana_output'] or scan_status['gau_output'] or scan_status['wayback_output']:
+                print("  - Crawling (Katana/GAU/Wayback) completed")
+            if scan_status['nuclei_output']:
+                print("  - Initial nuclei scanning completed")
+            if scan_status['active_file']:
+                print("  - Active subdomain validation completed")
+            if scan_status['subdomain_file']:
+                print("  - Subdomain discovery completed")
+        else:
+            print("[❌] Invalid choice. Please enter 'c' to continue, 'r' to restart, or 'd' for details.")
+
 OUTPUT_FOLDER_SUBDO = "subdomain"
 OUTPUT_FOLDER_ACTIVE = "active"
 OUTPUT_FOLDER_NUCLEI = "nuclei"
 OUTPUT_FOLDER_CRAWLED = "crawled"
 OUTPUT_FOLDER_SENSITIVE_DATA = "sensitive_data"
-OUTPUT_FOLDER_DORKING = "dorking"
 OUTPUT_FOLDER_GREP = "crawled_filtered"
 OUTPUT_FOLDER_TAKEOVER = "take_over"
 os.makedirs(OUTPUT_FOLDER_TAKEOVER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_GREP, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER_DORKING, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_SUBDO, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_ACTIVE, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_NUCLEI, exist_ok=True)
@@ -112,9 +233,10 @@ def setup_menu():
         print("2. Setup Chat ID")
         print("3. Setup Scanning Speed")
         print("4. Setup Katana Limit")
-        print("5. Setup All")
-        print("6. Back to main menu")
-        select = input("Select (1-6): ").strip()
+        print("5. Setup Resume Scan Mode")
+        print("6. Setup All")
+        print("7. Back to main menu")
+        select = input("Select (1-7): ").strip()
         if select == "1":
             cur = getattr(config, "BOT_TOKEN", "")
             val = input(f"Bot Token (current: '{cur[:6]}...'), enter=skip: ").strip()
@@ -145,7 +267,6 @@ def setup_menu():
                 else:
                     print("[!] Invalid choice; use 1/2/3.")
 
-            
         elif select == "4":
             print("\nKatana crawling can take a very long time if there are many active subdomains.")
             print("Limit the number of active subdomains used to avoid very long processing times.")
@@ -155,8 +276,8 @@ def setup_menu():
             new_limit = input(f"Enter subdomain limit for Katana (currently {current_limit}): ").strip()
             if new_limit.isdigit():
                 if new_limit == "00":
-                    write_config({"KATANA_LIMIT": 0})
-                    print("[✓] Katana set to unlimited mode (limit set to 00).")
+                    write_config({"KATANA_LIMIT": -1})
+                    print("[✓] Katana set to unlimited mode (limit set to -1).")
                 else:
                     new_limit_int = int(new_limit)
                     write_config({"KATANA_LIMIT": new_limit_int})
@@ -190,15 +311,80 @@ def setup_menu():
             limit_val = input(f"Enter Katana Limit (currently {current_limit}, Enter skip): ").strip()
             if limit_val.isdigit():
                 if limit_val == "00":
-                    updates["KATANA_LIMIT"] = 0
+                    updates["KATANA_LIMIT"] = -1
                 else:
                     updates["KATANA_LIMIT"] = int(limit_val)
-            
             if updates:
                 write_config(updates)
             else:
                 print("[ℹ️] No changes made.")
         elif select == "6":
+            return
+        elif select == "5":
+            current_mode = getattr(config, 'RESUME_SCAN_MODE', 'ask')
+            print(f"Current resume scan mode: {current_mode}")
+            print("Select resume scan mode:")
+            print("1. Ask every time (ask)")
+            print("2. Auto continue (continue)")
+            print("3. Auto restart (restart)")
+            while True:
+                choice = input(f"Resume scan mode (current: '{current_mode}'): ").strip()
+                if choice == "1":
+                    write_config({"RESUME_SCAN_MODE": "ask"})
+                    break
+                elif choice == "2":
+                    write_config({"RESUME_SCAN_MODE": "continue"})
+                    break
+                elif choice == "3":
+                    write_config({"RESUME_SCAN_MODE": "restart"})
+                    break
+                else:
+                    print("[!] Invalid choice; use 1/2/3.")
+        elif select == "6":
+            updates = {}
+            v = input(f"Bot Token (current: '{getattr(config,'BOT_TOKEN','')[:6]}...'), enter=skip: ").strip()
+            if v: updates["BOT_TOKEN"] = v
+            v = input(f"Chat ID (current: '{getattr(config,'CHAT_ID','')}'), enter=skip: ").strip()
+            if v: updates["CHAT_ID"] = v
+            print("Select scanning speed (current: '{}'):".format(getattr(config,'SCAN_SPEED','')))
+            print("1. Low")
+            print("2. Standard")
+            print("3. Fast")
+            speed_choice = input("Enter choice (1-3) or enter=skip: ").strip()
+            if speed_choice == "1":
+                updates["SCAN_SPEED"] = "low"
+            elif speed_choice == "2":
+                updates["SCAN_SPEED"] = "standard"
+            elif speed_choice == "3":
+                updates["SCAN_SPEED"] = "fast"
+            current_limit = getattr(config, 'KATANA_LIMIT', 20)
+            limit_val = input(f"Enter Katana Limit (currently {current_limit}, Enter skip): ").strip()
+            if limit_val.isdigit():
+                if limit_val == "00":
+                    updates["KATANA_LIMIT"] = -1
+                else:
+                    updates["KATANA_LIMIT"] = int(limit_val)
+
+            current_mode = getattr(config, 'RESUME_SCAN_MODE', 'ask')
+            print(f"Current resume scan mode: {current_mode}")
+            print("Select resume scan mode:")
+            print("1. Ask every time (ask)")
+            print("2. Auto continue (continue)")
+            print("3. Auto restart (restart)")
+            print("4. Skip (enter=skip)")
+            mode_choice = input("Enter choice (1-4) or enter=skip: ").strip()
+            if mode_choice == "1":
+                updates["RESUME_SCAN_MODE"] = "ask"
+            elif mode_choice == "2":
+                updates["RESUME_SCAN_MODE"] = "continue"
+            elif mode_choice == "3":
+                updates["RESUME_SCAN_MODE"] = "restart"
+
+            if updates:
+                write_config(updates)
+            else:
+                print("[ℹ️] No changes made.")
+        elif select == "7":
             return
         else:
             print("[❌] Invalid choice.")
@@ -225,27 +411,28 @@ def get_target_input():
 def run_with_animation_no_output(message, func, tool_name=None, label="Item", output_file=None, *args, **kwargs):
     if tool_name is None:
         tool_name = message.split("With")[-1].strip() if "With" in message else "Tool"
-    
+
     spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     spinner_index = 0
     count = 0
 
     def get_live_text():
+        nonlocal spinner_index
         spinner = spinner_frames[spinner_index]
         base_text = Text(f"{spinner} {message}...", style="bright_blue")
-        
+
         if count > 0:
             found_text = Text()
             found_text.append(" Found ", style="bright_blue")
             found_text.append(str(count), style="yellow")
             found_text.append(f" {label}", style="bright_blue")
             base_text.append(found_text)
-        
+
         return base_text
 
     with Live(get_live_text(), console=console, refresh_per_second=10, transient=True) as live:
         result = func(*args, **kwargs)
-        
+
         if isinstance(result, subprocess.Popen) and output_file:
             while not os.path.exists(output_file) and result.poll() is None:
                 time.sleep(0.1)
@@ -253,17 +440,22 @@ def run_with_animation_no_output(message, func, tool_name=None, label="Item", ou
                 live.update(get_live_text())
 
             try:
-                with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
-                    while result.poll() is None:
-                        line = f.readline()
-                        if line.strip():
-                            count += 1
-                        
-                        spinner_index = (spinner_index + 1) % len(spinner_frames)
-                        live.update(get_live_text())
-                        
-                        if not line:
-                            time.sleep(0.05)
+                if os.path.exists(output_file):
+                    with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
+                        count = len([line for line in f if line.strip()])
+
+                last_line_count = count
+                while result.poll() is None:
+                    time.sleep(0.5)  
+                    if os.path.exists(output_file):
+                        with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
+                            current_count = len([line for line in f if line.strip()])
+                        if current_count != last_line_count:
+                            count = current_count
+                            last_line_count = current_count
+                            spinner_index = (spinner_index + 1) % len(spinner_frames)
+                            live.update(get_live_text())
+
             except Exception as e:
                 live.update(Text(f"[!] Failed to read file: {e}", style="red"))
 
@@ -306,7 +498,6 @@ def feature_info():
    - Nuclei stage 2 → scan URLs (.js) for exposure detection
    - Scan speed can be adjusted (low/standard/fast).
    - All results are automatically sent to Telegram.
-    
 3. Deep Scan (Deep Recon)
    - Same as Dark Scan with differences:
    - Nuclei stage 1 → initial scan using common templates like:
@@ -316,8 +507,8 @@ def feature_info():
    - Nuclei stage 4 → scan subdomains for subdomain takeover detection
 
 4. Find Sensitive Data (Automatic Sensitive Data Search)
-   - Uses crawling results from previous gau process to identify URLs with sensitive extensions.
-   - Filters URLs that contain extensions: .zip, .tar, .gz, .7z, .rar, .bak, .backup, .old, 
+   - Crawling URLs using gau to collect URLs with sensitive extensions.
+   - Filters URLs that contain extensions: .zip, .tar, .gz, .7z, .rar, .bak, .backup, .old,
      .sql, .db, .sqlite, .env, .log, .conf, .config, .ini, .cfg, .xml, .json, .js
    - Tests filtered URLs with Httpx to identify active sensitive resources.
    - Detects configuration files, credentials, or important backups that are publicly exposed.
@@ -416,12 +607,16 @@ def write_config(updates: dict):
     importlib.reload(config)
     print("[✓] config.py updated and reloaded.")
 
+CMD_LINE_SPEED = None
+
 def get_speed():
+    if CMD_LINE_SPEED:
+        return CMD_LINE_SPEED
     s = getattr(config, "SCAN_SPEED", None)
     if not s:
-        return None
+        return "standard"  
     s = s.lower()
-    return s if s in SPEED_ARGS else None
+    return s if s in SPEED_ARGS else "standard"  
 
 def get_tool_args(tool_name: str):
     """
@@ -473,131 +668,54 @@ def is_subdomain_of_base_domain(domain, base_domain):
     """Check if domain is subdomain of base_domain"""
     domain = domain.lower()
     base_domain = base_domain.lower()
-    
     if domain == base_domain:
         return True
-    
     if domain.endswith('.' + base_domain):
         return True
-    
     return False
 
 def filter_domains_from_base_domain(input_file, base_domain, output_file):
     """Filter domains/URLs to only include those from the base domain or its subdomains"""
     with open(input_file, 'r', encoding='utf-8', errors='ignore') as f:
         lines = f.readlines()
-    
     filtered_lines = []
     for line in lines:
         line = line.strip()
         if not line:
             continue
-        
         if line.startswith(('http://', 'https://')):
             domain = extract_domain_from_url(line)
         else:
             domain = line
-        
         if is_subdomain_of_base_domain(domain, base_domain):
             filtered_lines.append(line)
-    
     with open(output_file, 'w', encoding='utf-8') as f:
         for line in filtered_lines:
             f.write(line + '\n')
-    
     return len(filtered_lines)
 
 def filter_subdomains_from_file(input_file, base_domain, output_file):
     """Filter subdomains file to only include those from the base domain"""
     return filter_domains_from_base_domain(input_file, base_domain, output_file)
-SENSITIVE_DORKS = [
-    'site:{target} ext:env',
-    'site:{target} ext:log',
-    'site:{target} ext:sql',
-    'site:{target} ext:bak',
-    'site:{target} ext:ini',
-    'site:{target} ext:yaml',
-    'site:{target} ext:yml',
-    'site:{target} inurl:".git/config"',
-    'site:{target} inurl:"/phpinfo.php"',
-    'site:{target} "DB_PASSWORD"',
-    'site:{target} "API_KEY="',
-    'site:{target} "api_key="',
-    'site:{target} "AWS_SECRET_ACCESS_KEY"',
-    'site:{target} "Authorization: Bearer"',
-    'site:{target} "PRIVATE KEY-----"',
-    'site:{target} "access_token="',
-    'site:{target} "smtp_password"',
-    'site:{target} "mail_password"',
-    'site:{target} "s3.amazonaws.com"'
-]
-def google_dork_search(target, output_file):
-    print(f"\033[94m[+] Starting dorking search for: {target}\033[0m")
-    results = []
-    for dork_template in SENSITIVE_DORKS:
-        dork = dork_template.format(target=target)
-        headers = {"User-Agent": random.choice(USER_AGENTS)}
-        url = f"https://html.duckduckgo.com/html?q={dork}"
-        print(f"[⚙️] Searching: {dork}")
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            for result in soup.find_all('a', class_='result__a'):
-                link = result.get('href')
-                if link:
-                  clean = clean_link(link)
-                  print(f"[✅] {clean}")
-                  results.append(clean)
-            time.sleep(random.uniform(2, 4))
-        except Exception as e:
-            print(f"[❌] Error searching dork '{dork}': {e}")
-    with open(output_file, "w") as f:
-        for url in results:
-            f.write(url + "\n")
-    print(f"[📁] Dork results saved at: {output_file}")
-def manual_dorking(output_file):
-    dork = input("Enter manual dork: ").strip()
-    if not dork:
-        print("[❌] Dork cannot be empty.")
-        return
-    headers = {"User-Agent": random.choice(USER_AGENTS)}
-    url = f"https://html.duckduckgo.com/html?q={dork}"
-    print(f"[🔍] Searching: {dork}")
-    results = []
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        for result in soup.find_all('a', class_='result__a'):
-            link = result.get('href')
-            if link:
-              clean = clean_link(link)
-              print(f"[✅] {clean}")
-              results.append(clean)
-        time.sleep(random.uniform(2, 4))
-    except Exception as e:
-        print(f"[❌] Search failed: {e}")
-    with open(output_file, "w") as f:
-        for url in results:
-            f.write(url + "\n")
-    print(f"[📁] Results saved at: {output_file}")
 def find_sensitive_data(target):
+    speed = get_speed()
+    print(f"\033[94m[ℹ️] Scan speed -> {speed}\033[0m")
+
+    print(f"\n\033[94m[▶] Starting process for {target} (SENSITIVE DATA)\033[0m")
+
     gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"gau_{target}.txt")
     crawling_gau(gau_output, target)
-    
     gau_filtered = gau_output + ".tmp"
     import shutil
     shutil.copy(gau_output, gau_filtered)
     filter_domains_from_base_domain(gau_filtered, target, gau_output)
     os.remove(gau_filtered)
-    
     check_sensitive_urls(target, gau_output)
 
 def check_sensitive_urls(target, input_file):
-    httpx_args = get_tool_args("httpx_sensitive") or ["-silent", "-mc", "200,403", "-t", "300", "-rate-limit", "1000", "-retries", "3", "-timeout", "10"]
-    
+    httpx_args = ["-silent", "-sc", "-nc", "-mc", "200,403", "-t", "300", "-rate-limit", "1000", "-retries", "3", "-timeout", "10"]
     filtered_input_file = input_file + ".filtered"
     filter_domains_from_base_domain(input_file, target, filtered_input_file)
-    
     pot_sen_file = os.path.join(OUTPUT_FOLDER_SENSITIVE_DATA, f"pot_sen_url_{target}.txt")
     sen_file = os.path.join(OUTPUT_FOLDER_SENSITIVE_DATA, f"sen_url_{target}.txt")
     sensitive_exts = [
@@ -641,14 +759,63 @@ def check_sensitive_urls(target, input_file):
             label="Potential Sensitive URLs",
             output_file=sen_file
         )
-        sensitive_urls = []
+
+        sensitive_exts = [
+            ".zip", ".tar", ".gz", ".7z", ".rar",
+            ".bak", ".backup", ".old",
+            ".sql", ".db", ".sqlite",
+            ".env", ".log",
+            ".conf", ".config", ".ini", ".cfg",
+            ".xml", ".json", ".js"
+        ]
+
+        urls_200 = []
+        urls_403 = []
+
         if os.path.exists(sen_file):
             with open(sen_file, "r", encoding="utf-8", errors="ignore") as f:
-                sensitive_urls = [line.strip() for line in f if line.strip()]
-        
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        url_parts = line.split()
+                        if url_parts:
+                            url = url_parts[0]
+
+                            if '[403]' in line:
+                                urls_403.append((url, url))  
+                            elif '[200]' in line:
+                                urls_200.append((url, url))
+
+        sensitive_urls = [url_tuple[0] for url_tuple in urls_200 + urls_403]
+
         if os.path.exists(filtered_input_file):
             os.remove(filtered_input_file)
-        
+
+        sen_200_file = os.path.join(OUTPUT_FOLDER_SENSITIVE_DATA, f"200_sens_{target}.txt")
+        with open(sen_200_file, "w", encoding="utf-8") as f:
+            for ext in sensitive_exts:
+                ext_urls = [url for url, _ in urls_200 if ext in url or url.endswith(ext)]
+                if ext_urls:
+                    f.write(f"{ext.upper()} URLs 200 OK:\n")
+                    for url in ext_urls:
+                        f.write(url + "\n")
+                    f.write("\n")  
+
+        sen_403_file = os.path.join(OUTPUT_FOLDER_SENSITIVE_DATA, f"403_sens_{target}.txt")
+        with open(sen_403_file, "w", encoding="utf-8") as f:
+            for ext in sensitive_exts:
+                ext_urls = [url for url, _ in urls_403 if ext in url or url.endswith(ext)]
+                if ext_urls:
+                    f.write(f"{ext.upper()} URLs 403 Forbidden:\n")
+                    for url in ext_urls:
+                        f.write(url + "\n")
+                    f.write("\n")  
+
+        if os.path.getsize(sen_200_file) > 0:  
+            send_telegram_report(sen_200_file, f"{target} (200 OK - Sensitive URLs)")
+        if os.path.getsize(sen_403_file) > 0:  
+            send_telegram_report(sen_403_file, f"{target} (403 Forbidden - Sensitive URLs)")
+
         return sensitive_urls
     except subprocess.CalledProcessError as e:
         print("[!] Failed running Httpx")
@@ -657,7 +824,6 @@ def check_sensitive_urls(target, input_file):
         if os.path.exists(filtered_input_file):
             os.remove(filtered_input_file)
         return []
-    send_file_telegram(sen_file, target)
 
 
 
@@ -713,14 +879,11 @@ def read_file_real_time(tool_name, file_path, label, process):
         print(f"[!] Failed to read file {file_path}: {e}")
 
 
-        
 def finding_subdomain(target, subdomain_file):
     temp_subdomain_file = subdomain_file + ".tmp"
     running_subfinder(target, temp_subdomain_file)
     running_assetfinder(target, temp_subdomain_file)
-    
     filter_subdomains_from_file(temp_subdomain_file, target, subdomain_file)
-    
     if os.path.exists(temp_subdomain_file):
         os.remove(temp_subdomain_file) 
 
@@ -786,7 +949,6 @@ def running_assetfinder(target, subdomain_file):
     print(f"\033[33m[✓]\033[94m Successfully found \033[33m{len(all_subs)}\033[94m subdomains\033[0m")
 
 def active_check(active_file, subdomain_file, url, target):
-    #[+] Checking active {url}...
     try:
         def run_httpx():
             httpx_args = get_tool_args("httpx") or ["-silent", "-mc", "200", "-t", "300", "-rate-limit", "1000", "-retries", "3", "-timeout", "10"]
@@ -872,24 +1034,27 @@ def crawling_gau(gau_output, target):
             gau_urls = [line.strip() for line in f if "http" in line]
 
 def crawling_katana(katana_output, input_file, target):
+    importlib.reload(config)
     limit = getattr(config, "KATANA_LIMIT", 20)
     if limit == 0:
         print(f"\033[94m[ℹ️] Katana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
         with open(katana_output, "w") as f:
             f.write("")
         return
-
-    with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
-        alive_subs = [line.strip() for line in f if line.strip()]
-
-    if len(alive_subs) >= limit:
-        limited_file = os.path.join(os.path.dirname(input_file), f"{limit}active_{target}.txt")
-        with open(limited_file, "w") as f:
-            for sub in alive_subs[:limit]:
-                f.write(sub + "\n")
-        input_for_katana = limited_file
-    else:
+    elif limit == -1:
         input_for_katana = input_file
+    else:
+        with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
+            alive_subs = [line.strip() for line in f if line.strip()]
+
+        if len(alive_subs) >= limit:
+            limited_file = os.path.join(os.path.dirname(input_file), f"{limit}active_{target}.txt")
+            with open(limited_file, "w") as f:
+                for sub in alive_subs[:limit]:
+                    f.write(sub + "\n")
+            input_for_katana = limited_file
+        else:
+            input_for_katana = input_file
 
     try:
         def run_katana():
@@ -926,7 +1091,6 @@ def combine_crawling_results(wayback_output, gau_output, katana_output, crawled_
     if os.path.exists(gau_output):
         with open(gau_output, "r", encoding="utf-8", errors="ignore") as f:
             gau_urls = [line.strip() for line in f if "http" in line]
-    
     all_urls = set()
     sensitive_exts = [
         ".zip", ".tar", ".gz", ".7z", ".rar",
@@ -944,7 +1108,6 @@ def combine_crawling_results(wayback_output, gau_output, katana_output, crawled_
     with open(crawled_filtered_output, "w") as f:
         for url in sorted(all_urls):
             f.write(url + "\n")
- 
 def separate_urls(crawled_filtered_output, param_output, js_output, target):
     import re
     target_match = re.search(r'crawled_filtered_(.*)\.txt', os.path.basename(crawled_filtered_output))
@@ -952,10 +1115,8 @@ def separate_urls(crawled_filtered_output, param_output, js_output, target):
         actual_target = target_match.group(1)
     else:
         actual_target = target
-    
     filtered_crawled_file = crawled_filtered_output + ".filtered"
     filter_domains_from_base_domain(crawled_filtered_output, actual_target, filtered_crawled_file)
-    
     param_urls = []
     js_urls = []
     with open(filtered_crawled_file, "r", encoding="utf-8", errors="ignore") as infile:
@@ -971,10 +1132,8 @@ def separate_urls(crawled_filtered_output, param_output, js_output, target):
     with open(js_output, "w") as f:
         for url in js_urls:
             f.write(url + "\n")
-    
     if os.path.exists(filtered_crawled_file):
         os.remove(filtered_crawled_file)
-    
     print(f"\033[33m[✓]\033[94m Successfully found \033[33m{len(param_urls)}\033[94m URLs with parameter\033[0m")
     print(f"\033[33m[✓]\033[94m Successfully found \033[33m{len(js_urls)}\033[94m URLs .js\033[0m")
 
@@ -983,9 +1142,13 @@ def process_crawling(target, active_file, wayback_output, gau_output, katana_out
     crawling_gau(gau_output, target)
     with open(active_file, "r", encoding="utf-8", errors="ignore") as f:
         alive_subs = [line.strip() for line in f if line.strip()]
+    importlib.reload(config)
     limit = getattr(config, "KATANA_LIMIT", 20)
 
-    if len(alive_subs) >= limit:
+    if limit == -1:
+        print(f"\033[94m[+] Unlimited mode enabled, using all active subdomains for Katana scan\033[0m")
+        input_for_katana = active_file
+    elif len(alive_subs) >= limit:
         limited_file = os.path.join(os.path.dirname(active_file), f"{limit}active_{target}.txt")
         with open(limited_file, "w") as f:
             for sub in alive_subs[:limit]:
@@ -996,27 +1159,23 @@ def process_crawling(target, active_file, wayback_output, gau_output, katana_out
         print(f"\033[94m[+] Active subdomains < {limit}, directly use entire file for Katana scan\033[0m")
         input_for_katana = active_file
     crawling_katana(katana_output, input_for_katana, target)
-    
     wayback_filtered = wayback_output + ".tmp"
     gau_filtered = gau_output + ".tmp"
     katana_filtered = katana_output + ".tmp"
-    
     import shutil
     shutil.copy(wayback_output, wayback_filtered)
     shutil.copy(gau_output, gau_filtered)
     shutil.copy(katana_output, katana_filtered)
-    
     filter_domains_from_base_domain(wayback_filtered, target, wayback_output)
     filter_domains_from_base_domain(gau_filtered, target, gau_output)
     filter_domains_from_base_domain(katana_filtered, target, katana_output)
-    
     os.remove(wayback_filtered)
     os.remove(gau_filtered)
     os.remove(katana_filtered)
-    
     combine_crawling_results(wayback_output, gau_output, katana_output, crawled_filtered_output, target)
 
 def send_telegram_report(file_path, domain, max_len=4000):
+    importlib.reload(config)
     if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
         print("[ℹ️] Bot token or chat_id not found / invalid. Skipping Telegram sending.")
         return
@@ -1055,6 +1214,7 @@ def send_telegram_report(file_path, domain, max_len=4000):
 
 def send_file_telegram(file_path, domain):
     """Send scan result file to Telegram (sendDocument)."""
+    importlib.reload(config)
     if not token_valid(config.BOT_TOKEN) or not chat_id_valid(config.CHAT_ID):
         print("[ℹ️] Bot token or chat_id not found / invalid. Skipping Telegram sending.")
         return 
@@ -1122,18 +1282,80 @@ def nuclei_param_dast(target, input_file, output_file, user_agent, scan_args):
     send_telegram_report(output_file, f"{target} Nuclei (DAST Mode)")            
 
 def nuclei_takeover(subdomain_file, output_path_takeover, target):
+    scan_args = get_tool_args("nuclei")  
+    cmd = ["nuclei", "-l", subdomain_file, "-nh", "-tags", "takeover", "-o", output_path_takeover]
+    if scan_args:
+        cmd.extend(scan_args)
+
     try:
         def nuclei_takeover_scan():
-            return subprocess.Popen([
-                "nuclei", "-l", subdomain_file, "-nh", "-tags", "takeover", "-o", output_path_takeover
-            ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            return subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+            )
         run_with_animation("Nuclei (Takeover Wildcard)", nuclei_takeover_scan)
     except subprocess.CalledProcessError as e:
             print("[!] Failed to run Nuclei (Takeover Wildcard)")
             print(e)
             log_error(target, "Nuclei (Takeover Wildcard)", str(e))
-            return            
-    send_telegram_report(output_path_takeover, f"({target}) Nuclei (Takeover Wildcard)") 
+            return
+    send_telegram_report(output_path_takeover, f"({target}) Nuclei (Takeover Wildcard)")
+
+def takeover_mass_file(file_path, output_name=None):
+    """Perform takeover check on a list of subdomains from a file"""
+    if not os.path.isfile(file_path):
+        print(f"[❌] File {file_path} not found.")
+        return
+
+    if not output_name:
+        output_name = os.path.basename(file_path).replace('.txt', '').replace('.', '_')
+
+    output_path = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TO_{output_name}.txt")
+
+    speed = get_speed()
+    print(f"\033[94m[ℹ️] Scan speed -> {speed}\033[0m")
+
+    print(f"\n\033[94m[▶] Starting process for file {file_path} (TAKEOVER MASSAL)\033[0m")
+
+    scan_args = get_tool_args("nuclei")  
+    cmd = ["nuclei", "-l", file_path, "-nh", "-tags", "takeover", "-o", output_path]
+    if scan_args:
+        cmd.extend(scan_args)
+
+    def run_nuc_takeover():
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
+
+    run_with_animation(f"Nuclei (Takeover Mass - {output_name})", run_nuc_takeover)
+    send_telegram_report(output_path, f"({output_name}) Nuclei (Takeover Mass)")
+
+def takeover_single(target):
+    """Perform takeover check on a single target"""
+    input_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
+    output_path = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
+
+    speed = get_speed()
+    print(f"\033[94m[ℹ️] Scan speed -> {speed}\033[0m")
+
+    print(f"\n\033[94m[▶] Starting process for {target} (TAKEOVER)\033[0m")
+
+    finding_subdomain(target, input_file)
+
+    scan_args = get_tool_args("nuclei")  
+    cmd = ["nuclei", "-l", input_file, "-nh", "-tags", "takeover", "-o", output_path]
+    if scan_args:
+        cmd.extend(scan_args)
+
+    def run_nuc_takeover():
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
+
+    run_with_animation(f"Nuclei (Takeover Single - {target})", run_nuc_takeover)
+    send_telegram_report(output_path, f"({target}) Nuclei (Takeover Single)")
 
 def takeover():
     while True:
@@ -1149,6 +1371,9 @@ def takeover():
         else:
             print("[❌] Invalid choice.")
 def check_takeover(mode):
+    speed = get_speed()
+    print(f"\033[94m[ℹ️] Scan speed -> {speed}\033[0m")
+
     if mode == "1":
         file_name = input("Enter file name containing domain/subdomain list (example: subdomain.txt): ").strip()
         if not os.path.isfile(file_name):
@@ -1160,20 +1385,100 @@ def check_takeover(mode):
             return
         input_file = file_name
         output_path = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TO_{output_name}.txt")
+        print(f"\n[▶] Starting process for file {file_name} (TAKEOVER MASSAL)")
         label = f"Takeover Mass ({output_name})"
     else:
         target = get_target_input()
         input_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
         output_path = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
+        print(f"\n[▶] Starting process for {target} (TAKEOVER WILDCARD)")
         finding_subdomain(target, input_file)
         label = f"Takeover Wildcard ({target})"
+    scan_args = get_tool_args("nuclei")  
+    cmd = ["nuclei", "-l", input_file, "-nh", "-tags", "takeover", "-o", output_path]
+    if scan_args:
+        cmd.extend(scan_args)
+
     def run_nuc_takeover():
-        return subprocess.Popen([
-            "nuclei", "-l", input_file, "-nh", "-tags", "takeover", "-o", output_path
-        ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        )
     run_with_animation(f"Nuclei {label}", run_nuc_takeover)
     send_telegram_report(output_path, label)    
 
+
+def light_scan_target(target, resume=False):
+        scan_args = ask_scan_speed()
+        subdomain_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
+        active_file = os.path.join(OUTPUT_FOLDER_ACTIVE, f"active_{target}.txt")
+        nuclei_output_httpx = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_active_{target}.txt")
+
+        if resume:
+            print(f"\n\033[94m[▶] Resuming process for {target} (LIGHTSCAN)\033[0m")
+            if os.path.exists(nuclei_output_httpx):
+                nuclei_count = sum(1 for line in open(nuclei_output_httpx, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{nuclei_count}\033[94m Subdomain active\033[0m")
+                print(f"[ℹ️] Nuclei scan already completed, scan finished")
+            elif os.path.exists(active_file):
+                active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+                print(f"\033[94m[+]\033[0m \033[94mStarting nuclei scan\033[0m")
+                user_agent = random.choice(USER_AGENTS)
+                start_time_nuclei_scan = time.time()
+                nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            elif os.path.exists(subdomain_file):
+                total_count = sum(1 for line in open(subdomain_file, 'r', encoding='utf-8', errors='ignore') if line.strip())
+
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{total_count}\033[94m subdomains\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting active validation\033[0m")
+                user_agent = random.choice(USER_AGENTS)
+                active_check(active_file, subdomain_file, "Subdomain", target)
+
+                active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+
+                start_time_nuclei_scan = time.time()
+                nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            else:
+                print(f"\n\033[94m[▶] Starting process for {target} (LIGHTSCAN)\033[0m")
+                start_time_url = time.time()
+                finding_subdomain(target, subdomain_file)
+                active_check(active_file, subdomain_file, "Subdomain", target)
+                user_agent = random.choice(USER_AGENTS)
+                start_time_nuclei_scan = time.time()
+                nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+        else:
+            print(f"\n[▶] Starting process for {target} (LIGHTSCAN)")
+            start_time_url = time.time()
+            finding_subdomain(target, subdomain_file)
+            active_check(active_file, subdomain_file, "Subdomain", target)
+            user_agent = random.choice(USER_AGENTS)
+            start_time_nuclei_scan = time.time()
+            nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+            end_time_nuclei_scan = time.time()
+            scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+            hours, remaining = divmod(int(scan_duration), 3600)
+            minutes, seconds = divmod(remaining, 60)
+            print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+
+        print(f"[✓] All processes completed for target: {target}")
 
 def light_scan():
         target = get_target_input()
@@ -1182,7 +1487,7 @@ def light_scan():
         active_file = os.path.join(OUTPUT_FOLDER_ACTIVE, f"active_{target}.txt")
         nuclei_output_httpx = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_active_{target}.txt")
         user_agent = random.choice(USER_AGENTS)
-        print(f"\n[▶] Starting process for {target}")
+        print(f"\n[▶] Starting process for {target} (LIGHTSCAN)")
         start_time_url = time.time()
         finding_subdomain(target, subdomain_file)
         active_check(active_file, subdomain_file, "Subdomain", target)
@@ -1194,7 +1499,371 @@ def light_scan():
         minutes, seconds = divmod(remaining, 60)
         print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
         print(f"[✓] All processes completed for target: {target}")
-        
+def dark_deep_target(mode, target, resume=False):
+        scan_args = ask_scan_speed()
+        subdomain_file = os.path.join(OUTPUT_FOLDER_SUBDO, f"{target}.txt")
+        active_file = os.path.join(OUTPUT_FOLDER_ACTIVE, f"active_{target}.txt")
+        nuclei_output_httpx = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_active_{target}.txt")
+        katana_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"katana_{target}.txt")
+        wayback_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"wayback_{target}.txt")
+        gau_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"gau_{target}.txt")
+        crawled_filtered_output = os.path.join(OUTPUT_FOLDER_CRAWLED, f"crawled_filtered_{target}.txt")
+        temp_crawled_filtered_output = os.path.join (OUTPUT_FOLDER_CRAWLED, f"temp_crawled_filtered_{target}.txt")
+        user_agent = random.choice(USER_AGENTS)
+        param_output = os.path.join(OUTPUT_FOLDER_GREP, f"param_{target}.txt")
+        js_output = os.path.join(OUTPUT_FOLDER_GREP, f"js_{target}.txt")
+        nuclei_output_js = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_exp_{target}.txt")
+        nuclei_output_param = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_dast_{target}.txt")
+        output_path_takeover = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
+        scan_type = "DARKSCAN" if mode == "dark" else "DEEPSCAN"
+
+        speed = get_speed()
+        print(f"\033[94m[ℹ️] Scan speed -> {speed}\033[0m")
+
+        if resume:
+            print(f"\n\033[94m[▶] Resuming process for {target} ({scan_type})\033[0m")
+            if os.path.exists(output_path_takeover if mode == "deep" else nuclei_output_param) and os.path.exists(nuclei_output_js):
+                print(f"[ℹ️] All nuclei scans already completed, scan finished")
+            elif os.path.exists(param_output) and os.path.exists(js_output):
+                total_count = sum(1 for line in open(subdomain_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(subdomain_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{total_count}\033[94m subdomains\033[0m")
+
+                active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(active_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+
+                wayback_count = sum(1 for line in open(wayback_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(wayback_output) else 0
+                gau_count = sum(1 for line in open(gau_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(gau_output) else 0
+                katana_count = sum(1 for line in open(katana_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(katana_output) else 0
+
+                if wayback_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mWaybackurls Found \033[93m{wayback_count}\033[94m URLs\033[0m")
+                if gau_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mGau Found \033[93m{gau_count}\033[94m URLs\033[0m")
+                if katana_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mKatana Found \033[93m{katana_count}\033[94m URLs\033[0m")
+
+                limit = getattr(config, "KATANA_LIMIT", 20)
+                if limit == -1:
+                    print(f"\033[94m[+]\033[0m \033[94mUnlimited mode enabled, using all active subdomains for Katana scan\033[0m")
+                elif limit == 0:
+                    print(f"\033[94m[ℹ️]\033[0m \033[94mKatana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
+
+                crawled_count = sum(1 for line in open(crawled_filtered_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(crawled_filtered_output) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{crawled_count}\033[94m URL active\033[0m")
+
+                param_count = sum(1 for line in open(param_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                js_count = sum(1 for line in open(js_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{param_count}\033[94m URLs with parameter\033[0m")
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{js_count}\033[94m URLs .js\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting nuclei scans\033[0m")
+                start_time_nuclei_scan = time.time()
+                if mode == "dark":
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                elif mode == "deep":
+                    nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                    nuclei_takeover(subdomain_file, output_path_takeover, target)
+                else:
+                    print(f"[!] Unknown scan mode: {mode}")
+                    return
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            elif os.path.exists(crawled_filtered_output):
+                total_count = sum(1 for line in open(subdomain_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(subdomain_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{total_count}\033[94m subdomains\033[0m")
+
+                active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(active_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+
+                wayback_count = sum(1 for line in open(wayback_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(wayback_output) else 0
+                gau_count = sum(1 for line in open(gau_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(gau_output) else 0
+                katana_count = sum(1 for line in open(katana_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(katana_output) else 0
+
+                if wayback_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mWaybackurls Found \033[93m{wayback_count}\033[94m URLs\033[0m")
+                if gau_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mGau Found \033[93m{gau_count}\033[94m URLs\033[0m")
+                if katana_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mKatana Found \033[93m{katana_count}\033[94m URLs\033[0m")
+
+                limit = getattr(config, "KATANA_LIMIT", 20)
+                if limit == -1:
+                    print(f"\033[94m[+]\033[0m \033[94mUnlimited mode enabled, using all active subdomains for Katana scan\033[0m")
+                elif limit == 0:
+                    print(f"\033[94m[ℹ️]\033[0m \033[94mKatana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
+
+                crawled_count = sum(1 for line in open(crawled_filtered_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{crawled_count}\033[94m URL active\033[0m")
+
+                separate_urls(crawled_filtered_output, param_output, js_output, target)
+                param_count = sum(1 for line in open(param_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                js_count = sum(1 for line in open(js_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{param_count}\033[94m URLs with parameter\033[0m")
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{js_count}\033[94m URLs .js\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting nuclei scans\033[0m")
+                start_time_nuclei_scan = time.time()
+                if mode == "dark":
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                elif mode == "deep":
+                    nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                    nuclei_takeover(subdomain_file, output_path_takeover, target)
+                else:
+                    print(f"[!] Unknown scan mode: {mode}")
+                    return
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            elif os.path.exists(katana_output) or os.path.exists(gau_output) or os.path.exists(wayback_output):
+                total_count = sum(1 for line in open(subdomain_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(subdomain_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{total_count}\033[94m subdomains\033[0m")
+
+                active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(active_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+
+                wayback_count = sum(1 for line in open(wayback_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(wayback_output) else 0
+                gau_count = sum(1 for line in open(gau_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(gau_output) else 0
+                katana_count = sum(1 for line in open(katana_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(katana_output) else 0
+
+                if wayback_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mWaybackurls Found \033[93m{wayback_count}\033[94m URLs\033[0m")
+                if gau_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mGau Found \033[93m{gau_count}\033[94m URLs\033[0m")
+                if katana_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mKatana Found \033[93m{katana_count}\033[94m URLs\033[0m")
+
+                limit = getattr(config, "KATANA_LIMIT", 20)
+                if limit == -1:
+                    print(f"\033[94m[+]\033[0m \033[94mUnlimited mode enabled, using all active subdomains for Katana scan\033[0m")
+                elif limit == 0:
+                    print(f"\033[94m[ℹ️]\033[0m \033[94mKatana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
+
+                active_check(temp_crawled_filtered_output, crawled_filtered_output, "URL", target)
+                shutil.move(temp_crawled_filtered_output, crawled_filtered_output)
+
+                total_crawled = sum(1 for line in open(crawled_filtered_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{total_crawled}\033[94m URL active\033[0m")
+
+                separate_urls(crawled_filtered_output, param_output, js_output, target)
+                param_count = sum(1 for line in open(param_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                js_count = sum(1 for line in open(js_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{param_count}\033[94m URLs with parameter\033[0m")
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{js_count}\033[94m URLs .js\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting nuclei scans\033[0m")
+
+                start_time_nuclei_scan = time.time()
+                if mode == "dark":
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                elif mode == "deep":
+                    nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                    nuclei_takeover(subdomain_file, output_path_takeover, target)
+                else:
+                    print(f"[!] Unknown scan mode: {mode}")
+                    return
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            elif os.path.exists(active_file):
+                total_count = sum(1 for line in open(subdomain_file, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(subdomain_file) else 0
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{total_count}\033[94m subdomains\033[0m")
+
+                active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting crawling\033[0m")
+                process_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output)
+
+                wayback_count = sum(1 for line in open(wayback_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(wayback_output) else 0
+                gau_count = sum(1 for line in open(gau_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(gau_output) else 0
+                katana_count = sum(1 for line in open(katana_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(katana_output) else 0
+
+                if wayback_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mWaybackurls Found \033[93m{wayback_count}\033[94m URLs\033[0m")
+                if gau_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mGau Found \033[93m{gau_count}\033[94m URLs\033[0m")
+                if katana_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mKatana Found \033[93m{katana_count}\033[94m URLs\033[0m")
+
+                limit = getattr(config, "KATANA_LIMIT", 20)
+                if limit == -1:
+                    print(f"\033[94m[+]\033[0m \033[94mUnlimited mode enabled, using all active subdomains for Katana scan\033[0m")
+                elif limit == 0:
+                    print(f"\033[94m[ℹ️]\033[0m \033[94mKatana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
+
+                total_crawled = sum(1 for line in open(crawled_filtered_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{total_crawled}\033[94m URL active\033[0m")
+
+                separate_urls(crawled_filtered_output, param_output, js_output, target)
+                param_count = sum(1 for line in open(param_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                js_count = sum(1 for line in open(js_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{param_count}\033[94m URLs with parameter\033[0m")
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{js_count}\033[94m URLs .js\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting nuclei scans\033[0m")
+                start_time_nuclei_scan = time.time()
+                if mode == "dark":
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                elif mode == "deep":
+                    nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                    nuclei_takeover(subdomain_file, output_path_takeover, target)
+                else:
+                    print(f"[!] Unknown scan mode: {mode}")
+                    return
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            elif os.path.exists(subdomain_file):
+                total_count = sum(1 for line in open(subdomain_file, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                active_count = 0
+                if os.path.exists(active_file):
+                    active_count = sum(1 for line in open(active_file, 'r', encoding='utf-8', errors='ignore') if line.strip())
+
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{total_count}\033[94m subdomains\033[0m")
+                if active_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{active_count}\033[94m Subdomain active\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting active validation and crawling\033[0m")
+                active_check(active_file, subdomain_file, "Subdomain", target)
+
+                process_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output)
+
+                wayback_count = sum(1 for line in open(wayback_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(wayback_output) else 0
+                gau_count = sum(1 for line in open(gau_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(gau_output) else 0
+                katana_count = sum(1 for line in open(katana_output, 'r', encoding='utf-8', errors='ignore') if line.strip()) if os.path.exists(katana_output) else 0
+
+                if wayback_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mWaybackurls Found \033[93m{wayback_count}\033[94m URLs\033[0m")
+                if gau_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mGau Found \033[93m{gau_count}\033[94m URLs\033[0m")
+                if katana_count > 0:
+                    print(f"\033[93m[✓]\033[0m \033[94mKatana Found \033[93m{katana_count}\033[94m URLs\033[0m")
+
+                limit = getattr(config, "KATANA_LIMIT", 20)
+                if limit == -1:
+                    print(f"\033[94m[+]\033[0m \033[94mUnlimited mode enabled, using all active subdomains for Katana scan\033[0m")
+                elif limit == 0:
+                    print(f"\033[94m[ℹ️]\033[0m \033[94mKatana limit set to 0, skipping crawling process with Katana for {target}\033[0m")
+
+                total_crawled = sum(1 for line in open(crawled_filtered_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mHttpx Found \033[93m{total_crawled}\033[94m URL active\033[0m")
+
+                separate_urls(crawled_filtered_output, param_output, js_output, target)
+                param_count = sum(1 for line in open(param_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                js_count = sum(1 for line in open(js_output, 'r', encoding='utf-8', errors='ignore') if line.strip())
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{param_count}\033[94m URLs with parameter\033[0m")
+                print(f"\033[93m[✓]\033[0m \033[94mSuccessfully found \033[93m{js_count}\033[94m URLs .js\033[0m")
+
+                print(f"\033[94m[+]\033[0m \033[94mStarting nuclei scans\033[0m")
+                start_time_nuclei_scan = time.time()
+                if mode == "dark":
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                elif mode == "deep":
+                    nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                    nuclei_takeover(subdomain_file, output_path_takeover, target)
+                else:
+                    print(f"[!] Unknown scan mode: {mode}")
+                    return
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+            else:
+                print(f"\n\033[94m[▶] Starting process for {target} ({scan_type})\033[0m")
+                start_time_url = time.time()
+                finding_subdomain(target, subdomain_file)
+                active_check(active_file, subdomain_file, "Subdomain", target)
+                process_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output)
+                active_check(temp_crawled_filtered_output, crawled_filtered_output, "URL", target)
+                shutil.move(temp_crawled_filtered_output, crawled_filtered_output)
+                separate_urls(crawled_filtered_output, param_output, js_output, target)
+                end_time_url = time.time()
+                url_duration = end_time_url - start_time_url
+                hours, remaining = divmod(int(url_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"\033[92m[⏱️] Successfully collected URLs from {target} for "
+                    f"\033[93m{hours}\033[92m hours "
+                    f"\033[93m{minutes}\033[92m minutes "
+                    f"\033[93m{seconds}\033[92m seconds\033[0m")
+                start_time_nuclei_scan = time.time()
+                if mode == "dark":
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                elif mode == "deep":
+                    nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                    nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                    nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                    nuclei_takeover(subdomain_file, output_path_takeover, target)
+                else:
+                    print(f"[!] Unknown scan mode: {mode}")
+                    return
+                end_time_nuclei_scan = time.time()
+                scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+                hours, remaining = divmod(int(scan_duration), 3600)
+                minutes, seconds = divmod(remaining, 60)
+                print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+        else:
+            print(f"\n[▶] Starting process for {target} ({scan_type})")
+            start_time_url = time.time()
+            finding_subdomain(target, subdomain_file)
+            active_check(active_file, subdomain_file, "Subdomain", target)
+            process_crawling(target, active_file, wayback_output, gau_output, katana_output, crawled_filtered_output)
+            active_check(temp_crawled_filtered_output, crawled_filtered_output, "URL", target)
+            shutil.move(temp_crawled_filtered_output, crawled_filtered_output)
+            separate_urls(crawled_filtered_output, param_output, js_output, target)
+            end_time_url = time.time()
+            url_duration = end_time_url - start_time_url
+            hours, remaining = divmod(int(url_duration), 3600)
+            minutes, seconds = divmod(remaining, 60)
+            print(f"\033[92m[⏱️] Successfully collected URLs from {target} for "
+                f"\033[93m{hours}\033[92m hours "
+                f"\033[93m{minutes}\033[92m minutes "
+                f"\033[93m{seconds}\033[92m seconds\033[0m")
+            start_time_nuclei_scan = time.time()
+            if mode == "dark":
+                nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+            elif mode == "deep":
+                nuclei_without_parameter(target, active_file, nuclei_output_httpx, user_agent, scan_args)
+                nuclei_js_exposure(target, js_output, nuclei_output_js, user_agent, scan_args)
+                nuclei_param_dast(target, param_output, nuclei_output_param, user_agent, scan_args)
+                nuclei_takeover(subdomain_file, output_path_takeover, target)
+            else:
+                print(f"[!] Unknown scan mode: {mode}")
+                return
+            end_time_nuclei_scan = time.time()
+            scan_duration = end_time_nuclei_scan - start_time_nuclei_scan
+            hours, remaining = divmod(int(scan_duration), 3600)
+            minutes, seconds = divmod(remaining, 60)
+            print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
+
+        print(f"[✓] All processes completed for target: {target}")
+
 def dark_deep(mode):
         target = get_target_input()
         scan_args = ask_scan_speed()
@@ -1212,7 +1881,8 @@ def dark_deep(mode):
         nuclei_output_js = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_exp_{target}.txt")
         nuclei_output_param = os.path.join(OUTPUT_FOLDER_NUCLEI, f"nuc_dast_{target}.txt")
         output_path_takeover = os.path.join(OUTPUT_FOLDER_TAKEOVER, f"TOW_{target}.txt")
-        print(f"\n[▶] Starting process for {target}")
+        scan_type = "DARKSCAN" if mode == "dark" else "DEEPSCAN"
+        print(f"\n[▶] Starting process for {target} ({scan_type})")
         start_time_url = time.time()
         finding_subdomain(target, subdomain_file)
         active_check(active_file, subdomain_file, "Subdomain", target)
@@ -1246,7 +1916,6 @@ def dark_deep(mode):
         minutes, seconds = divmod(remaining, 60)
         print(f"[⏱️] Nuclei scanning process completed in {hours} hours {minutes} minutes {seconds} seconds")
         print(f"[✓] All processes completed for target: {target}")
-  
 
 def feature_update_tool():
     VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/version.txt"
@@ -1303,28 +1972,97 @@ def feature_update_tool():
     except Exception as e:
         print(f"[❌] Failed to update: {e}")
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='LAZYHUNTER - Automation Recon Tool')
+    parser.add_argument('--lightscan', '-lts', action='store_true', help='Run Light Scan')
+    parser.add_argument('--darkscan', '-dks', action='store_true', help='Run Dark Scan')
+    parser.add_argument('--deepscan', '-dps', action='store_true', help='Run Deep Scan')
+    parser.add_argument('--takeover', '-tov', action='store_true', help='Run Subdomain Takeover Check')
+    parser.add_argument('--sensitive', '-sens', action='store_true', help='Find Sensitive Data')
+    parser.add_argument('-t', '--target', type=str, help='Target domain for scanning')
+    parser.add_argument('-list', '-l', type=str, help='File containing list of subdomains for takeover check')
+    parser.add_argument('-speed', '-s', type=str, help='Scanning speed: low/standard/fast or 1/2/3')
+    parser.add_argument('-ac', '--auto-continue', action='store_true', help='Auto continue previous scan if exists')
+    parser.add_argument('-ar', '--auto-restart', action='store_true', help='Auto restart scan even if previous files exist')
+
+    args = parser.parse_args()
+
     print_logo()
-    while True:
-        scan_type = display_menu()
-        if scan_type == "1":
-            light_scan()
-        elif scan_type == "2":
-            dark_deep("dark")
-        elif scan_type == "3":
-            dark_deep("deep")
-        elif scan_type == "4":
-            takeover()  
-        elif scan_type == "5":
-            target = get_target_input()
-            find_sensitive_data(target)
-        elif scan_type == "9":
-            setup_menu()
-        elif scan_type == "0":
-            feature_info()
-        elif scan_type == "99":
-            print("[✔] Exiting LAZYHUNTER. Thank you!")
-            break
-        elif scan_type == "999": 
-            feature_update_tool()
-        else:
-            print("[!] Invalid choice. Try again.")  
+
+    if any([args.lightscan, args.darkscan, args.deepscan, args.takeover, args.sensitive]):
+        if args.takeover and args.list:
+            pass
+        elif not args.target:
+            print("[❌] Target is required when using scan options. Use -t or --target to specify target.")
+            sys.exit(1)
+
+        speed_map = {'1': 'low', '2': 'standard', '3': 'fast'}
+        speed_value = args.speed
+        if speed_value in speed_map:
+            speed_value = speed_map[speed_value]
+
+        if speed_value:
+            if speed_value not in ['low', 'standard', 'fast']:
+                print("[❌] Invalid speed value. Use low/standard/fast or 1/2/3.")
+                sys.exit(1)
+            CMD_LINE_SPEED = speed_value
+
+        resume_action = None
+        if args.target and not args.auto_continue and not args.auto_restart:
+            scan_status = check_previous_scan(args.target)
+            if scan_status['has_any_files']:
+                resume_mode = getattr(config, 'RESUME_SCAN_MODE', 'ask')
+                if resume_mode == 'ask':
+                    resume_action = ask_continue_or_restart(args.target, scan_status)
+                elif resume_mode == 'continue':
+                    resume_action = 'continue'
+                elif resume_mode == 'restart':
+                    resume_action = 'restart'
+        elif args.auto_continue:
+            resume_action = 'continue'
+        elif args.auto_restart:
+            resume_action = 'restart'
+
+        if args.lightscan:
+            if resume_action == 'restart' or not resume_action:
+                light_scan_target(args.target, resume=False)
+            elif resume_action == 'continue':
+                light_scan_target(args.target, resume=True)
+        elif args.darkscan or args.deepscan:
+            mode = "dark" if args.darkscan else "deep"
+            if resume_action == 'restart' or not resume_action:
+                dark_deep_target(mode, args.target, resume=False)
+            elif resume_action == 'continue':
+                dark_deep_target(mode, args.target, resume=True)
+        elif args.takeover:
+            if args.list:
+                output_name = args.target if args.target else None
+                takeover_mass_file(args.list, output_name)
+            else:
+                takeover_single(args.target)
+        elif args.sensitive:
+            find_sensitive_data(args.target)
+    else:
+        while True:
+            scan_type = display_menu()
+            if scan_type == "1":
+                light_scan()
+            elif scan_type == "2":
+                dark_deep("dark")
+            elif scan_type == "3":
+                dark_deep("deep")
+            elif scan_type == "4":
+                takeover()
+            elif scan_type == "5":
+                target = get_target_input()
+                find_sensitive_data(target)
+            elif scan_type == "9":
+                setup_menu()
+            elif scan_type == "0":
+                feature_info()
+            elif scan_type == "99":
+                print("[✔] Exiting LAZYHUNTER. Thank you!")
+                break
+            elif scan_type == "999":
+                feature_update_tool()
+            else:
+                print("[!] Invalid choice. Try again.")
