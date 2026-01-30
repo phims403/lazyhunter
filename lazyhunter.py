@@ -169,7 +169,7 @@ os.makedirs(OUTPUT_FOLDER_ACTIVE, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_NUCLEI, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_CRAWLED, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER_SENSITIVE_DATA, exist_ok=True)
-LOCAL_VERSION = "1.3"
+LOCAL_VERSION = "1.4"
 def get_status_version():
     url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/version.txt"
     try:
