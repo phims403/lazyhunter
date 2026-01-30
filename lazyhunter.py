@@ -440,21 +440,17 @@ def run_with_animation_no_output(message, func, tool_name=None, label="Item", ou
                 live.update(get_live_text())
 
             try:
-                if os.path.exists(output_file):
-                    with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
-                        count = len([line for line in f if line.strip()])
+                with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
+                    while result.poll() is None:
+                        line = f.readline()
+                        if line.strip():
+                            count += 1
 
-                last_line_count = count
-                while result.poll() is None:
-                    time.sleep(0.5)  
-                    if os.path.exists(output_file):
-                        with open(output_file, 'r', encoding="utf-8", errors="ignore") as f:
-                            current_count = len([line for line in f if line.strip()])
-                        if current_count != last_line_count:
-                            count = current_count
-                            last_line_count = current_count
-                            spinner_index = (spinner_index + 1) % len(spinner_frames)
-                            live.update(get_live_text())
+                        spinner_index = (spinner_index + 1) % len(spinner_frames)
+                        live.update(get_live_text())
+
+                        if not line:
+                            time.sleep(0.05)
 
             except Exception as e:
                 live.update(Text(f"[!] Failed to read file: {e}", style="red"))
