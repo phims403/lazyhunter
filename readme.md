@@ -269,7 +269,7 @@ python lazyhunter.py -dps -t example.com -s fast
 ## Support This Project
 If you find this tool useful and want to support its development, you can contribute via Bitcoin:
 
-**Bitcoin Address**: `BC1QLNQZ4GFP454YM46KM9V8HLMSQHJ6G3P5FKQHM0`
+**Bitcoin Address**: `bc1qlnqz4gfp454ym46km9v8hlmsqhj6g3p5fkqhm0`
 
 Your support helps maintain and improve this open-source tool for the bug bounty community!
 
