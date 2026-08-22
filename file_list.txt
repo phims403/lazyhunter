@@ -2,3 +2,11 @@ lazyhunter.py
 readme.md
 setup.sh
 requirements.txt
+config.py
+version.txt
+file_list.txt
+prompt/goal-prompt.txt
+prompt/goal-prompt-continue-session.txt
+prompt/SUPER_PROMPT_BUG_BOUNTY_AI.md
+prompt/readme.md
+prompt/readme-id.md

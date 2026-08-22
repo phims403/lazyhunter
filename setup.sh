@@ -100,7 +100,11 @@ install_golang() {
     esac
     
     echo "[*] Checking latest Go version..."
-    LATEST_VERSION=$(curl -s https://go.dev/VERSION?m=text)
+    if command -v curl &> /dev/null; then
+        LATEST_VERSION=$(curl -sf https://go.dev/VERSION?m=text)
+    elif command -v wget &> /dev/null; then
+        LATEST_VERSION=$(wget -qO- https://go.dev/VERSION?m=text)
+    fi
     if [ -z "$LATEST_VERSION" ]; then
         echo "[!] Failed to get latest version. Using default."
         LATEST_VERSION="go1.23.4"
@@ -112,8 +116,17 @@ install_golang() {
     
     echo "[*] Downloading Go ${LATEST_VERSION} for ${OS}-${ARCH}..."
     echo "    URL: $DOWNLOAD_URL"
-    
-    if ! wget --quiet --show-progress "$DOWNLOAD_URL" -O "/tmp/${FILENAME}"; then
+
+    if command -v wget &> /dev/null; then
+        DOWNLOAD_CMD="wget --quiet --show-progress $DOWNLOAD_URL -O /tmp/${FILENAME}"
+    elif command -v curl &> /dev/null; then
+        DOWNLOAD_CMD="curl -fsSL $DOWNLOAD_URL -o /tmp/${FILENAME}"
+    else
+        echo "[❌] Neither wget nor curl found. Please install one of them first."
+        return 1
+    fi
+
+    if ! eval "$DOWNLOAD_CMD"; then
         echo "[❌] Failed to download Go. Check internet connection or try manually:"
         echo "    $DOWNLOAD_URL"
         return 1
@@ -237,10 +250,22 @@ install_python_dependencies() {
         PIP_CMD="pip"
     fi
     
-    $PIP_CMD install -r requirements.txt
+    $PIP_CMD install -r requirements.txt 2>/tmp/pip_err.$$
     if [ $? -eq 0 ]; then
         echo "[✓] Python dependencies successfully installed"
+        rm -f /tmp/pip_err.$$
     else
+        if grep -q "externally-managed-environment" /tmp/pip_err.$$ 2>/dev/null; then
+            echo "[!] Detected externally managed environment, retrying with --break-system-packages..."
+            $PIP_CMD install --break-system-packages -r requirements.txt
+            if [ $? -eq 0 ]; then
+                echo "[✓] Python dependencies successfully installed"
+                rm -f /tmp/pip_err.$$
+                return 0
+            fi
+        fi
+        cat /tmp/pip_err.$$ 2>/dev/null
+        rm -f /tmp/pip_err.$$
         echo "[❌] Failed to install Python dependencies"
         return 1
     fi
@@ -316,16 +341,16 @@ check_system_httpx() {
 
 check_all_tools() {
     echo "[*] Checking availability of all required tools..."
-    
+
     TOOLS_STATUS=()
-    
+
     if command -v python3 &> /dev/null; then
         PYTHON_VERSION=$(python3 --version 2>&1)
         TOOLS_STATUS+=("Python3: ✓ $PYTHON_VERSION")
     else
         TOOLS_STATUS+=("Python3: ✗ Not installed")
     fi
-    
+
     if command -v pip3 &> /dev/null; then
         PIP_VERSION=$(pip3 --version 2>&1)
         TOOLS_STATUS+=("pip3: ✓ $PIP_VERSION")
@@ -335,7 +360,7 @@ check_all_tools() {
     else
         TOOLS_STATUS+=("pip: ✗ Not installed")
     fi
-    
+
     if command -v go &> /dev/null; then
         GO_VERSION=$(go version 2>&1)
         GO_PATH=$(which go)
@@ -344,7 +369,8 @@ check_all_tools() {
     else
         TOOLS_STATUS+=("Go: ✗ Not installed")
     fi
-    
+
+    # Check Go-based tools
     for tool in subfinder httpx nuclei katana assetfinder gau waybackurls; do
         if command -v "$tool" &> /dev/null; then
             TOOL_VERSION=$("$tool" -version 2>/dev/null | head -1 || echo "Unknown version")
@@ -353,62 +379,19 @@ check_all_tools() {
             TOOLS_STATUS+=("$tool: ✗ Not installed")
         fi
     done
-    
+
+    # Check SecretFinder
+    if [ -f "$HOME/SecretFinder/SecretFinder.py" ]; then
+        TOOLS_STATUS+=("SecretFinder: ✓ Installed")
+    elif command -v secretfinder &> /dev/null; then
+        TOOLS_STATUS+=("SecretFinder: ✓ Installed (wrapper)")
+    else
+        TOOLS_STATUS+=("SecretFinder: ✗ Not installed")
+    fi
+
     echo ""
     echo "══════════════════════════════════════════════"
     echo "LAZYHUNTER TOOLS STATUS:"
-    echo "══════════════════════════════════════════════"
-    for status in "${TOOLS_STATUS[@]}"; do
-        echo "$status"
-    done
-    echo "══════════════════════════════════════════════"
-    echo ""
-}
-
-
-check_all_tools() {
-    echo "[*] Mengecek ketersediaan semua tools yang dibutuhkan..."
-    
-    TOOLS_STATUS=()
-    
-    if command -v python3 &> /dev/null; then
-        PYTHON_VERSION=$(python3 --version 2>&1)
-        TOOLS_STATUS+=("Python3: ✓ $PYTHON_VERSION")
-    else
-        TOOLS_STATUS+=("Python3: ✗ Tidak terinstall")
-    fi
-    
-    if command -v pip3 &> /dev/null; then
-        PIP_VERSION=$(pip3 --version 2>&1)
-        TOOLS_STATUS+=("pip3: ✓ $PIP_VERSION")
-    elif command -v pip &> /dev/null; then
-        PIP_VERSION=$(pip --version 2>&1)
-        TOOLS_STATUS+=("pip: ✓ $PIP_VERSION")
-    else
-        TOOLS_STATUS+=("pip: ✗ Tidak terinstall")
-    fi
-    
-    if command -v go &> /dev/null; then
-        GO_VERSION=$(go version 2>&1)
-        GO_PATH=$(which go)
-        TOOLS_STATUS+=("Go: ✓ $GO_VERSION")
-        TOOLS_STATUS+=("Go Path: ✓ $GO_PATH")
-    else
-        TOOLS_STATUS+=("Go: ✗ Tidak terinstall")
-    fi
-    
-    for tool in subfinder httpx nuclei katana assetfinder gau waybackurls; do
-        if command -v "$tool" &> /dev/null; then
-            TOOL_VERSION=$("$tool" -version 2>/dev/null | head -1 || echo "Unknown version")
-            TOOLS_STATUS+=("$tool: ✓ $TOOL_VERSION")
-        else
-            TOOLS_STATUS+=("$tool: ✗ Tidak terinstall")
-        fi
-    done
-    
-    echo ""
-    echo "══════════════════════════════════════════════"
-    echo "STATUS TOOLS LAZYHUNTER:"
     echo "══════════════════════════════════════════════"
     for status in "${TOOLS_STATUS[@]}"; do
         echo "$status"
@@ -458,8 +441,50 @@ install_additional_tools() {
     else
         echo "[!] Nuclei not found, skipping template update"
     fi
-    
+
+    echo "[*] Installing SecretFinder..."
+    install_secretfinder
+
     add_go_to_path
+}
+
+
+install_secretfinder() {
+    SECRETFINDER_DIR="$HOME/SecretFinder"
+
+    if [ -f "$SECRETFINDER_DIR/SecretFinder.py" ]; then
+        echo "[✓] SecretFinder already installed"
+    else
+        echo "[+] Cloning SecretFinder from GitHub..."
+        if ! git clone https://github.com/m4ll0k/SecretFinder.git "$SECRETFINDER_DIR" 2>/tmp/sf_clone_err.$$; then
+            echo "[❌] Failed to clone SecretFinder:"
+            cat /tmp/sf_clone_err.$$
+            rm -f /tmp/sf_clone_err.$$
+            return 1
+        fi
+        rm -f /tmp/sf_clone_err.$$
+
+        if [ -f "$SECRETFINDER_DIR/requirements.txt" ]; then
+            echo "[+] Installing SecretFinder requirements..."
+            if command -v pip3 &> /dev/null; then
+                pip3 install -r "$SECRETFINDER_DIR/requirements.txt" 2>/dev/null || pip install -r "$SECRETFINDER_DIR/requirements.txt" 2>/dev/null
+            elif command -v pip &> /dev/null; then
+                pip install -r "$SECRETFINDER_DIR/requirements.txt" 2>/dev/null
+            fi
+            echo "[✓] SecretFinder requirements installed"
+        else
+            echo "[!] SecretFinder requirements.txt not found"
+        fi
+    fi
+
+    # Create wrapper script
+    echo "[+] Creating SecretFinder wrapper script..."
+    sudo tee /usr/local/bin/secretfinder > /dev/null << 'EOF'
+#!/bin/bash
+python3 $HOME/SecretFinder/SecretFinder.py "$@"
+EOF
+    sudo chmod +x /usr/local/bin/secretfinder
+    echo "[✓] SecretFinder wrapper script created at /usr/local/bin/secretfinder"
 }
 
 
@@ -509,6 +534,16 @@ add_go_to_path() {
 install_all() {
     echo "[*] Starting complete LazyHunter installation..."
     
+    # Detect shell config file for PATH messages
+    CONFIG_FILE=""
+    SHELL_NAME=$(basename "$SHELL")
+    USER_HOME="$HOME"
+    case "$SHELL_NAME" in
+      bash) CONFIG_FILE="$USER_HOME/.bashrc" ;;
+      zsh)  CONFIG_FILE="$USER_HOME/.zshrc" ;;
+      fish) CONFIG_FILE="$USER_HOME/.config/fish/config.fish" ;;
+    esac
+
     echo "[1/4] Install Python & pip"
     if ! install_python_pip; then
         echo "[❌] Failed to install Python & pip"
@@ -537,11 +572,11 @@ install_all() {
     echo "══════════════════════════════════════════════"
     echo "[✔] COMPLETE INSTALLATION FINISHED!"
     echo "[✔] All tools successfully installed"
-    echo "[!] Restart terminal or run:"
-    if [ -n "$CONFIG_FILE" ]; then
-        echo "    source $CONFIG_FILE"
+    if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+        echo "[!] Run 'source $CONFIG_FILE' or restart terminal to activate PATH."
+    else
+        echo "[!] Restart terminal or manually add ~/go/bin to your PATH."
     fi
-    echo "to activate permanent PATH."
     echo "══════════════════════════════════════════════"
 }
 

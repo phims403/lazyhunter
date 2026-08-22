@@ -1,0 +1,129 @@
+/goal @/home/phims/lazyhunter-update/update/prompt/SUPER_PROMPT_BUG_BOUNTY_AI.md
+Hunt *TARGET using the files in @source folder. Follow ALL instructions in the main prompt above — it is your complete hunting manual (methodology, tool rules, validation rules, output structure). Execute it fully. The goal below is your DRIVING FORCE — do not stop until it is achieved:
+
+**GOAL: Find 50 critical, real, stand-alone vulnerabilities on *TARGET. Zero false positives. You must find exactly 50 real critical vulnerabilities. Do not stop until 50 are found.**
+
+This goal exists to force you to deploy your FULL capability as a bug bounty hunter. Treat it as achievable. Push beyond what feels "enough". Do not stop at the first findings. Do not stop when you think you have done a "good job". Do not stop until the goal is reached and the entire target is exhausted.
+
+**EXHAUSTIVE HUNTING MANDATE (ABSOLUTE — NON-NEGOTIABLE):**
+
+- You MUST touch EVERY SINGLE endpoint in the attack surface. Not the "interesting" ones. Not the "high-value" ones. ALL of them. Every URL in the corpus, every parameter, every JS file, every sensitive file, every auth flow, every API endpoint, every subdomain.
+- ZERO endpoints left untouched. If even ONE endpoint has not been tested, your hunt is NOT complete.
+- Sweep the entire surface first, then go deep on every endpoint. Repeat pass after pass until nothing remains untested.
+- Every parameter gets tested for EVERY applicable vulnerability class: SQLi, XSS, SSRF, IDOR, open redirect, SSTI, auth bypass, method abuse, and more.
+- Every 403 gets bypass attempts. Every JS file gets fetched, deobfuscated, and analyzed. Every sensitive file gets checked. Every auth flow gets probed.
+- After each pass, ask yourself: "Have I truly touched EVERYTHING?" If the answer is anything other than an absolute YES, keep hunting.
+- You are finished ONLY when: every endpoint has been tested, every finding has been validated (Valid / False Positive / Informational with exact reasoning), every valid vulnerability has been fully exploited with proof, and the target's attack surface is COMPLETELY exhausted.
+
+**OUTPUT:**
+Follow the OUTPUT STRUCTURE in the main prompt exactly — no deviations:
+- Create the workspace folder FIRST (before anything else).
+- Document EVERY endpoint tested in the super report, with per-endpoint details and status.
+- Create per-vulnerability folders with report, mandatory download script, proof data (per the download rules), and pretty-proof.
+- When the hunt is truly finished, zip the workspace and send it to the user's Telegram bot as instructed in the main prompt.
+
+Do not stop until every endpoint has been hunted, every finding documented and validated, and 50 confirmed critical vulnerabilities are found. Exhaust the target completely. Leave NOTHING untouched.
+
+**SESSION LOOP & CONTINUATION (CRITICAL — how this goal runs):**
+
+- This goal runs as an autonomous loop. The loop WILL be capped at a maximum number of turns, and each session WILL end before the goal is reached. This is expected and normal. It does NOT mean the hunt is done.
+- At the END of every session, before the loop stops, you MUST leave a complete continuation state so the next session can pick up exactly where you stopped:
+  - Update the hunting progress log in the workspace (`recon/hunting_log_endpoints_tested.txt` or equivalent) with every endpoint tested so far, its result, and what remains untested.
+  - Update the super report with current findings and status.
+  - End your final message with a clear, explicit "NEXT SESSION CONTINUATION" summary: what has been done, what is still untested, what the next targets are, and what to do first.
+- When a new session starts (or resumes), READ the continuation state FIRST, then continue hunting from exactly where the previous session stopped. NEVER restart the hunt from scratch. NEVER re-test endpoints that were already tested. NEVER re-download data that was already downloaded.
+- Keep all workspace state on disk. The workspace folder is the single source of truth across sessions.
+- The goal persists across sessions. Do not treat a session boundary as a stopping point — treat it as a checkpoint in a continuous hunt.
+
+
+
+---
+
+# ===== INSTRUKSI CONTINUE SESSION — BACA SETELAH GOAL DI ATAS =====
+
+Kamu adalah sesi LANJUTAN dari perburuan sebelumnya pada target yang sama. Kamu TIDAK memulai dari nol secara mental — tapi kamu juga TIDAK menggabungkan hasil ke folder lama. Tugasmu: **buat folder workspace BARU**, baca state perburuan sebelumnya, lalu **MELANJUTKAN** hunting dengan fokus MENCARI VULNERABILITY BARU yang BELUM PERNAH ditemukan oleh sesi-sesi sebelumnya.
+
+### LANGKAH 0 (SEBELUM APA PUN): Cek Folder Workspace Lama & Baca State Sebelumnya
+
+Sebelum membuat folder baru atau melakukan tindakan apa pun, kamu WAJIB:
+
+1. **Cek apakah ada folder `prompt-engineering-*` yang sudah ada** di direktori kerja saat ini (tempat kamu dijalankan — di luar folder prompt engineering mana pun). Gunakan `ls` / `glob` / `read_directory` untuk melihat semua folder yang ada.
+2. **Identifikasi folder lama dengan TARGET YANG SAMA** dengan targetmu sekarang. Jika ada lebih dari satu, pilih yang paling terakhir / paling lengkap.
+3. **Buka dan baca `super-report.md`** di folder lama tersebut. Pahami:
+   - Semua vulnerability yang SUDAH ditemukan (ID, severity, endpoint, teknik eksploitasi) — ini daftar "JANGAN DITEMUKAN ULANG"
+   - Semua endpoint yang SUDAH diuji dan hasilnya (Valid / False Positive / Informational / Safe)
+   - Area mana yang sudah diburu habis dan area mana yang belum tersentuh — **sejauh mana hunting sebelumnya berhenti**
+4. **Baca `recon/hunting_log_endpoints_tested.txt`** di folder lama — log lengkap endpoint yang sudah diuji beserta hasilnya.
+5. **Lihat daftar folder `vuln-XXX*/`** di folder lama — setiap folder = satu vulnerability yang sudah ditemukan. Baca `report.md`-nya untuk memahami detail temuan.
+6. **Periksa folder `reported/`** di folder lama (jika ada) — vulnerability yang sudah dilaporkan.
+7. **Identifikasi kesenjangan**: Apa yang BELUM diuji? Subdomain mana yang belum disentuh? Parameter mana yang belum dicoba? Endpoint mana yang hanya di-probe 200 tapi belum digali dalam? File JS mana yang belum dianalisis? Teknik mana yang belum dicoba?
+
+Jika TIDAK ada folder lama dengan target yang sama: ini adalah sesi pertama untuk target ini — lanjutkan langsung ke bagian GOAL UTAMA di atas dan jalankan hunting normal dari awal.
+
+### BELAJAR DARI POLA TEMUAN SEBELUMNYA (MODAL HUNTING — WAJIB)
+
+Saat membaca `super-report.md` dan `report.md` folder-folder vuln lama, kamu WAJIB menganalisis **pola kelemahan security yang diterapkan target** — bukan hanya mencatat daftar vuln:
+
+- **Amati pola yang berulang**: misalnya banyak temuan lama terjadi karena *auth tidak diterapkan secara proper* di API/internal service (endpoint tanpa autentikasi → data bocor), karena *swagger/internal docs terekspos*, karena *dev/staging environment dibiarkan terbuka*, atau pola lainnya. Identifikasi akar masalah yang sama di balik banyak temuan.
+- **Jadikan pola itu modal**: setelah memahami polanya, cari endpoint/subdomain LAIN yang belum diuji dengan kelas kelemahan yang SAMA (mis. jika banyak API bocor karena tanpa auth, uji semua API endpoint yang belum disentuh dengan metode yang sama — akses langsung tanpa kredensial, cek metode HTTP lain, cek parameter tersembunyi, dll.). Pola yang sudah terbukti menghasilkan temuan valid di sesi lama sangat mungkin berlaku di tempat lain.
+- **Tapi TIDAK MUTLAK WAJIB memakai metode yang sama**: pola lama hanyalah SATU jalur. Kamu TETAP WAJIB mengerahkan SELURUH kemampuanmu untuk mencari kerentanan dari KELAS LAIN yang belum pernah dicoba: injection (SQLi/NoSQLi/command/SSTI), XSS (reflected/stored/DOM), SSRF, IDOR, path traversal, file upload, auth bypass, business logic, race condition, misconfiguration, exposed secrets, dan semua kelas yang ada di prompt utama. Jangan pernah membatasi diri hanya pada apa yang sudah ditemukan sesi lalu.
+- **Kombinasikan keduanya**: mulai dengan pola yang terbukti (cepat menghasilkan temuan), lalu perluas ke seluruh kelas vulnerability di seluruh permukaan serangan. Tujuan akhir tetap sama — mengeksploitasi SEMUA kerentanan yang ada, bukan hanya yang mirip dengan temuan lama.
+
+### BUAT FOLDER WORKSPACE BARU (WAJIB)
+
+- Kamu WAJIB membuat folder workspace **BARU** dengan format `prompt-engineering-{model-name}-{YYYY-MM-DD-HHMM}` (timestamp saat ini, mengikuti aturan di prompt utama) — **JANGAN** menulis ke folder lama, **JANGAN** menggabungkan hasil ke folder lama.
+- Folder lama tetap utuh dan tidak disentuh (hanya dibaca sebagai referensi).
+- Semua temuan BARU sesi ini disimpan di folder baru ini.
+
+### ATURAN ANTI-DUPLIKASI (MUTLAK)
+
+- **DILARANG KERAS** mencari/melaporkan vulnerability yang SUDAH ADA di super-report atau folder `vuln-XXX*` sesi-sesi sebelumnya (target yang sama). Ini membuang waktu dan merusak kredibilitas.
+- **DILARANG KERAS** menguji ulang endpoint yang sudah tercatat "Safe", "False Positive", atau "Informational" dengan hasil yang sama — kecuali kamu punya teknik/vektor BARU yang belum pernah dicoba di endpoint itu.
+- Setiap temuan baru WAJIB lolos filter: **BUKAN duplikat dari temuan lama**, terkonfirmasi, stand-alone, dan berbeda kelas/endpoint dari yang sudah ada.
+- Di `super-report.md` folder barumu, cantumkan referensi ke folder lama (path-nya) dan ringkas vuln-vuln lama yang sudah ada — lalu fokus dokumentasi pada temuan BARU sesi ini.
+
+### PRIORITAS HUNTING SESI LANJUTAN: ENDPOINT BERBEDA DULU, VULN TIDAK BOLEH DUPLIKAT (MUTLAK)
+
+Aturan emas sesi lanjutan: **VULN TIDAK BOLEH DUPLIKAT. ENDPOINT BOLEH SAMA. SUBDOMAIN BOLEH SAMA.**
+
+- **Prioritas UTAMA (wajib dikerjakan PERTAMA):** hunting di endpoint yang BELUM PERNAH disentuh sesi-sesi sebelumnya. Endpoint berbeda = prioritas tertinggi. Sebelum menyentuh endpoint yang sudah pernah diuji, sapu DULU semua endpoint yang belum pernah diuji sama sekali.
+- **Subdomain yang sama SANGAT BOLEH dan WAJIB:** jika sesi sebelumnya sudah hunting di subdomain A, kamu TETAP wajib hunting di subdomain A lagi selama masih ada endpoint di subdomain A yang belum tersentuh. Setiap subdomain di scope WAJIB dihunting SEMUA endpointnya. Subdomain yang sudah mulai diburu sebelumnya BUKAN alasan untuk berhenti — justru lanjutkan di subdomain yang sama, tapi di endpoint yang BERBEDA.
+- **Endpoint yang sama BOLEH, tapi BUKAN prioritas:** menguji ulang endpoint yang sudah diuji BOLEH dilakukan hanya jika kamu mencari vulnerability KELAS LAIN yang belum pernah dicoba di endpoint itu (mis. sesi lalu hanya cek SQLi di endpoint X, sekarang coba IDOR/SSRF/auth bypass/path traversal di endpoint X yang sama). Tapi ini BUKAN prioritas — kerjakan hanya setelah SEMUA endpoint yang belum tersentuh di seluruh subdomain sudah diburu habis.
+- **Vuln yang sama DILARANG KERAS:** meskipun endpoint/subdomain boleh sama, vulnerability yang SAMA TIDAK BOLEH dicatat ulang. Jika kamu tidak sengaja menemukan vuln yang identik dengan temuan sesi sebelumnya (seharusnya tidak terjadi, karena kamu fokus di endpoint yang belum tersentuh), JANGAN dicatat sebagai temuan baru — lewati, catat di hunting log sebagai duplikat dari temuan lama (sebut ID vuln lama-nya), lalu lanjutkan ke target berikutnya.
+- **Ukuran keberhasilan sesi lanjutan:** di akhir sesi, setiap subdomain di scope WAJIB sudah "habis" — SEMUA endpointnya sudah disentuh dan diuji minimal satu kali. Sesi lanjutan dianggap berjalan optimal jika menemukan vuln BARU di endpoint yang BELUM tersentuh — bukan mengulang-ulang endpoint lama yang sudah pernah diuji.
+
+### CARA HUNTING DI SESI LANJUTAN
+
+- Kamu masih punya akses ke **file source LazyHunter** (folder `source/` atau file output LazyHunter yang diberikan) — baca ulang file-file itu untuk mencari endpoint yang LUPA atau TERLEWAT oleh sesi sebelumnya.
+- Fokus pada: endpoint yang hanya di-probe ringan, parameter yang belum di-fuzz, subdomain yang belum diburu dalam, file JS yang belum dianalisis, teknik yang belum dicoba sesi lalu.
+- **Alur kerja prioritas per subdomain:** (1) daftar SEMUA endpoint di subdomain tersebut dari source LazyHunter + temuan sesi lama, (2) tandai mana yang sudah diuji sesi lama (dari super-report + hunting log), (3) buru DULU semua endpoint yang BELUM ditandai, (4) baru setelah itu — jika masih mencari — kembali ke endpoint lama untuk kelas vulnerability yang belum pernah dicoba di sana.
+- Semua aturan di prompt utama (curl sebagai senjata, DO NOT re-run tool LazyHunter, validasi ketat, bukti dampak, download data, script.py wajib, struktur output) tetap berlaku penuh.
+- Nomor penomoran `vuln-XXX` di folder barumu mulai dari 001 (folder baru = penomoran baru).
+
+### OUTPUT DI SESI LANJUTAN
+
+- Semua temuan baru ditulis di folder workspace BARU sesuai struktur output di prompt utama (`super-report.md`, `vuln-XXX-Severity/` berisi `report.md` + `script.py` + `proof/` + `pretty-proof/`, `recon/`).
+- Perbarui `hunting_log_endpoints_tested.txt` di folder barumu untuk setiap endpoint yang kamu uji.
+- Lanjutkan sampai goal di atas tercapai — jangan berhenti di temuan pertama, terus buru yang belum tersentuh.
+
+### VALIDASI FINAL ANTI-DUPLIKASI (WAJIB — SEBELUM HUNTING DIANGGAP SELESAI)
+
+Di akhir sesi, setelah SEMUA temuanmu tercatat, lakukan langkah berikut SEBELUM menyatakan hunting selesai:
+
+1. **Susun daftar lengkap** semua vulnerability yang kamu temukan di sesi ini (ID, endpoint, jenis vuln, teknik eksploitasi).
+2. **Cocokkan SATU PER SATU dengan temuan sesi-sesi sebelumnya** (super-report + folder `vuln-XXX*` di folder lama, target yang sama):
+   - Bandingkan berdasarkan **endpoint yang sama** (URL yang sama atau path yang sama) DAN **jenis kerentanan yang sama**.
+   - Bandingkan juga berdasarkan **akar masalah yang sama** (mis. dua endpoint berbeda tapi keduanya bocor karena auth tidak proper dengan cara yang identik — jika pada dasarnya eksploitasi yang sama, itu duplikat).
+3. **Jika ditemukan duplikat**: HAPUS temuan tersebut dari folder barumu, jangan masukkan ke super-report, dan catat di hunting log bahwa itu duplikat dari temuan lama (sebut ID temuan lama-nya). Jangan pernah mempertahankan temuan duplikat hanya karena "endpoint-nya sedikit berbeda".
+4. **Jika ragu apakah duplikat**: bandingkan PoC-nya. Jika PoC-nya sama (request sama, payload sama, respons sama, dampak sama) → duplikat. Jika ada perbedaan signifikan (vektor berbeda, dampak berbeda, kelas berbeda) → bisa dipertahankan, tapi jelaskan di report mengapa ini BUKAN duplikat.
+5. Setelah validasi selesai, baru nyatakan hunting selesai dan lanjut ke deliverable akhir (zip + kirim Telegram sesuai prompt utama).
+
+Aturan inti: **NOL duplikat lebih baik daripada SATU duplikat.** Temuan duplikat merusak kredibilitas dan membuang waktu user.
+
+*TARGET: ganti-ini-dengan-domain-target.com
+@(mention directory/file output lazyhunter — contoh: @/home/user/lazyhunter/target_output/domain.com)
+*CATATAN PENGISIAN:
+1. Ganti *TARGET dengan domain yang mau di-hunt (contoh: example.com) — HARUS target yang sama dengan sesi sebelumnya.
+2. Mention (@) folder/direktori berisi output LazyHunter untuk target itu — biasanya di target_output/{domain}/ (mode by_target) berisi subdomains.txt, active.txt, crawled_filtered.txt, param.txt, js.txt, nuclei output, sensitive_data, dll. AI akan membaca file-file ini sebagai attack surface.
+3. Pastikan path-nya benar-benar ada di komputer kamu sebelum menjalankan goal.
+4. Untuk sesi lanjutan: AI akan mencari folder workspace lama (prompt-engineering-*) dengan target yang sama, membaca state-nya, lalu melanjutkan hunting dari titik terakhir — TIDAK mulai dari nol.
