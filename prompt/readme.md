@@ -84,9 +84,13 @@ Paste the whole adjusted goal prompt into the AI agent (or save it as a file and
 3. Create a workspace folder `prompt-engineering-{model}-{timestamp}/`.
 4. Hunt exhaustively until the goal (50 critical vulnerabilities) is reached or the session ends.
 
-### 5. Continue Session
+### 5. Continue a Previous Session
 
-When the AI session stops (turn limit reached) before the goal is achieved — this is normal — you can continue:
+There are two ways to resume / continue hunting in the AI agent:
+
+**Option A — easiest:** if your AI session is still open (you just hit a turn limit), simply type `continue` (or `/goal continue` in Command Code) to keep the AI working. The agent will pick up where it left off in the **same** session.
+
+**Option B — new session, same target:** use `goal-prompt-continue-session.txt` when you **already finished one hunting session** and want to start a **fresh session** on the **same target** — for example because the previous session reached its goal (or ended), and you now want the AI to keep hunting that same domain.
 
 1. Open `goal-prompt-continue-session.txt`.
 2. Adjust the **main prompt path** (first line) and the **target + output folder** (bottom section) — the **target must be the same** as the previous session.
@@ -94,8 +98,8 @@ When the AI session stops (turn limit reached) before the goal is achieved — t
 
 The AI will automatically:
 - Look for previous workspace folders (`prompt-engineering-*`) with the same target.
-- Read `super-report.md` and `hunting_log_endpoints_tested.txt` from previous sessions.
-- **Continue** from where it left off — no restart from scratch, no re-reporting vulnerabilities that already exist (anti-duplication).
+- Read `super-report.md` and `hunting_log_endpoints_tested.txt` from those sessions.
+- **Continue hunting** — no restart from scratch, no re-reporting vulnerabilities that already exist (anti-duplication).
 
 ---
 

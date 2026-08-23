@@ -86,7 +86,11 @@ Paste seluruh isi goal prompt yang sudah disesuaikan ke AI agent (atau simpan se
 
 ### 5. Sesi Lanjutan (Continue)
 
-Saat sesi AI berhenti (batas turn tercapai) sebelum goal tercapai — ini normal — kamu bisa lanjut:
+Ada dua cara untuk melanjutkan / melanjutkan hunting di AI agent:
+
+**Opsi A — termudah:** kalau sesi AI masih terbuka (kamu baru kehabiran batas turn), cukup ketik `continue` (atau `/goal continue` di Command Code) untuk tetap jalan. Agent akan lanjut dari titik terakhir di **sesi yang sama**.
+
+**Opsi B — sesi baru, target yang sama:** pakai `goal-prompt-continue-session.txt` ketika kamu **sudah selesai satu sesi hunting** dan ingin mulay **sesi baru** di **target yang sama** — misalnya sebab sesi sebelumnya sudah mencapai goal (atau berakhir), dan kamu sekarang ingin AI lanjutkan hunting domain yang sama.
 
 1. Buka `goal-prompt-continue-session.txt`.
 2. Sesuaikan **path main prompt** (baris pertama) dan **target + folder output** (bagian bawah) — **target harus sama** dengan sesi sebelumnya.
@@ -95,7 +99,7 @@ Saat sesi AI berhenti (batas turn tercapai) sebelum goal tercapai — ini normal
 AI akan otomatis:
 - Mencari folder workspace lama (`prompt-engineering-*`) dengan target yang sama.
 - Membaca `super-report.md` dan `hunting_log_endpoints_tested.txt` dari sesi sebelumnya.
-- **Melanjutkan** dari titik terakhir — tidak mengulang dari nol, tidak menemukan ulang vulnerability yang sudah ada (anti-duplikasi).
+- **Melanjutkan hunting** — tidak mengulang dari nol, tidak menemukan ulang vulnerability yang sudah ada (anti-duplikasi).
 
 ---
 
