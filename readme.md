@@ -227,6 +227,19 @@ cat target_output/example.com/js.txt | while read url; do curl -s $url | grep -i
 cat target_output/example.com/active.txt | ffuf -w - -u http://FUZZ -mc 200
 ```
 
+### 🤖 Hunting with AI Agents
+
+The output files are also perfect as an **attack surface for AI-powered bug bounty hunting**. Instead of manually analyzing every file, you can let an AI agent (Claude Code, Command Code, OpenCode, etc.) do the exhaustive hunting for you.
+
+**Quick start:**
+1. Run a Deep Scan on your target: `python lazyhunter.py -dps -t example.com -s fast`
+2. Open the bundled AI hunting prompts in the **`prompt/`** folder
+3. Follow the instructions in **`prompt/readme.md`** (or `prompt/readme-id.md` for Indonesian) — adjust the main prompt path & target, then run it with an AI agent that supports the `/goal` autonomous-loop feature (e.g. Command Code)
+
+The AI will read the LazyHunter output files (subdomains, active hosts, crawled URLs, params, JS files, sensitive data, nuclei results) as its attack surface, create a workspace, and hunt exhaustively — with support for continuing across multiple sessions.
+
+> 📌 **Tip:** for long autonomous hunting sessions, use a cost-effective model like `deepseek-v4-flash` — good quality, low cost.
+
 ---
 
 ### 📊 Public Bug Bounty Programs Domains
