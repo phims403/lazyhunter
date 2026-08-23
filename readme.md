@@ -233,12 +233,15 @@ The output files are also perfect as an **attack surface for AI-powered bug boun
 
 **Quick start:**
 1. Run a Deep Scan on your target: `python lazyhunter.py -dps -t example.com -s fast`
-2. Open the bundled AI hunting prompts in the **`prompt/`** folder
-3. Follow the instructions in **`prompt/readme.md`** (or `prompt/readme-id.md` for Indonesian) — adjust the main prompt path & target, then run it with an AI agent that supports the `/goal` autonomous-loop feature (e.g. Command Code)
+2. Open the bundled AI hunting prompts in the [**`prompt/`**](./prompt) folder
+3. Follow the instructions in [**`prompt/readme.md`**](./prompt/readme.md) (or [`prompt/readme-id.md`](./prompt/readme-id.md) for Indonesian) — adjust the main prompt path & target, then run it with an AI agent that supports the `/goal` autonomous-loop feature (e.g. Command Code)
 
 The AI will read the LazyHunter output files (subdomains, active hosts, crawled URLs, params, JS files, sensitive data, nuclei results) as its attack surface, create a workspace, and hunt exhaustively — with support for continuing across multiple sessions.
 
-> 📌 **Tip:** for long autonomous hunting sessions, use a cost-effective model like `deepseek-v4-flash` — good quality, low cost.
+> 📌 **Model tips for AI hunting:**
+> - **Use a model that supports a large context window (1M tokens)** — a single hunting session can run for a very long time (1–2+ hours), consuming a lot of AI tokens as it reads files, writes reports, and loops. A big context window lets it keep the whole target's data in memory without losing track.
+> - **`deepseek-v4-flash` is recommended** — it supports 1M context, is **cheap**, and the quality is good. The combination of low cost + huge context makes it ideal for long autonomous sessions that burn through many tokens.
+> - For very complex targets you can use larger models, but be aware the cost will be significantly higher over a long session.
 
 ---
 
